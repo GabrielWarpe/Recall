@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ── Tamanhos de fonte (escala 1.0; sobrescritos em runtime) ── */
+  :root {
+    --text-xs: 12px;
+    --leading-xs: 16px;
+    --text-sm: 14px;
+    --leading-sm: 20px;
+    --text-base: 16px;
+    --leading-base: 24px;
+    --text-lg: 18px;
+    --leading-lg: 28px;
+    --text-xl: 20px;
+    --leading-xl: 28px;
+    --text-2xl: 24px;
+    --leading-2xl: 32px;
+    --text-3xl: 30px;
+    --leading-3xl: 36px;
+  }
+
+  /* ── Tema CLARO (padrão) ── */
+  :root {
+    --color-background: 247 245 252;
+    --color-surface: 247 245 252;
+    --color-surface-container: 238 233 247;
+    --color-surface-container-high: 231 224 243;
+    --color-surface-container-highest: 224 216 238;
+    --color-surface-container-low: 243 239 250;
+    --color-surface-bright: 253 251 255;
+    --color-primary: 109 40 217;
+    --color-primary-container: 124 58 237;
+    --color-on-primary: 255 255 255;
+    --color-on-primary-container: 237 224 255;
+    --color-secondary: 74 68 88;
+    --color-secondary-container: 226 223 240;
+    --color-tertiary: 154 70 0;
+    --color-tertiary-container: 255 182 144;
+    --color-on-surface: 28 27 34;
+    --color-on-surface-variant: 73 69 78;
+    --color-outline-variant: 202 196 212;
+    --color-outline: 121 116 126;
+    --color-error: 186 26 26;
+  }
+
+  /* ── Tema ESCURO ── */
+  .dark:root {
+    --color-background: 11 19 38;
+    --color-surface: 11 19 38;
+    --color-surface-container: 23 31 51;
+    --color-surface-container-high: 34 42 61;
+    --color-surface-container-highest: 45 52 73;
+    --color-surface-container-low: 19 27 46;
+    --color-surface-bright: 49 57 77;
+    --color-primary: 210 187 255;
+    --color-primary-container: 124 58 237;
+    --color-on-primary: 63 0 142;
+    --color-on-primary-container: 237 224 255;
+    --color-secondary: 199 196 216;
+    --color-secondary-container: 73 71 88;
+    --color-tertiary: 255 182 144;
+    --color-tertiary-container: 170 73 0;
+    --color-on-surface: 218 226 253;
+    --color-on-surface-variant: 204 195 216;
+    --color-outline-variant: 74 68 85;
+    --color-outline: 149 141 161;
+    --color-error: 255 180 171;
+  }
+}

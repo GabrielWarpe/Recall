@@ -1,0 +1,151 @@
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { db } from '@/services/database';
+import { DECK_COLORS, DECK_EMOJIS } from '@/constants/theme';
+import { Input } from '@/components/ui/Input';
+import { useThemeColors } from '@/hooks/useThemeColors';
+
+export default function EditDeckScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const colors = useThemeColors();
+
+  const [title, setTitle] = useState('');
+  const [selectedColor, setSelectedColor] = useState(DECK_COLORS[0]!);
+  const [selectedEmoji, setSelectedEmoji] = useState(DECK_EMOJIS[0]!);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    void db.decks.getOne(id).then(d => {
+      if (d) {
+        setTitle(d.title);
+        setSelectedColor(d.color);
+        setSelectedEmoji(d.emoji);
+      }
+      setLoading(false);
+    });
+  }, [id]);
+
+  const handleSave = async () => {
+    if (!title.trim()) {
+      Alert.alert('Atenção', 'Dê um título ao deck.');
+      return;
+    }
+    if (!id) return;
+    setSaving(true);
+    try {
+      await db.playlists.update(id, {
+        name: title.trim(),
+        emoji: selectedEmoji,
+        color: selectedColor,
+      });
+      router.back();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro ao salvar.';
+      Alert.alert('Erro', msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <SafeAreaView className="flex-1 bg-background">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        className="flex-1"
+      >
+        {/* Header */}
+        <View className="flex-row items-center px-4 pt-2 pb-4 border-b border-outline-variant/20">
+          <TouchableOpacity onPress={() => router.back()} className="p-2">
+            <Ionicons name="close" size={24} color={colors.onSurface} />
+          </TouchableOpacity>
+          <Text className="flex-1 text-center text-on-surface font-jakarta-bold text-lg">
+            Editar deck
+          </Text>
+          <TouchableOpacity
+            onPress={() => void handleSave()}
+            className="p-2"
+            disabled={saving || loading}
+          >
+            <Text className="text-primary font-inter-semibold text-base">
+              {saving ? 'Salvando...' : 'Salvar'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {loading ? null : (
+          <ScrollView
+            contentContainerStyle={{ padding: 24, gap: 20 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Input
+              label="Título do deck"
+              placeholder="Ex: Biologia Celular..."
+              value={title}
+              onChangeText={setTitle}
+            />
+
+            {/* Emoji picker */}
+            <View className="gap-2">
+              <Text className="text-on-surface-variant font-inter-medium text-sm">
+                Ícone
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View className="flex-row gap-2">
+                  {DECK_EMOJIS.map(e => (
+                    <TouchableOpacity
+                      key={e}
+                      onPress={() => setSelectedEmoji(e)}
+                      className={`w-10 h-10 rounded-xl items-center justify-center ${
+                        selectedEmoji === e
+                          ? 'bg-primary/20 border border-primary'
+                          : 'bg-surface-container-high'
+                      }`}
+                    >
+                      <Text className="text-xl">{e}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+
+            {/* Color picker */}
+            <View className="gap-2">
+              <Text className="text-on-surface-variant font-inter-medium text-sm">
+                Cor
+              </Text>
+              <View className="flex-row gap-3 flex-wrap">
+                {DECK_COLORS.map(c => (
+                  <TouchableOpacity
+                    key={c}
+                    onPress={() => setSelectedColor(c)}
+                    className={`w-9 h-9 rounded-full border-2 ${
+                      selectedColor === c
+                        ? 'border-on-surface scale-110'
+                        : 'border-transparent'
+                    }`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </View>
+            </View>
+          </ScrollView>
+        )}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}

@@ -1,0 +1,387 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import type { Flashcard } from '@/types';
+import { generateFlashcards, makeFlashcard } from '@/services/ai';
+import { useDecks } from '@/hooks/useDecks';
+import { DECK_COLORS, DECK_EMOJIS } from '@/constants/theme';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { useThemeColors } from '@/hooks/useThemeColors';
+
+type Mode = 'ai' | 'manual';
+
+export default function CreateDeckScreen() {
+  const router = useRouter();
+  const { createDeck } = useDecks();
+  const colors = useThemeColors();
+  const [mode, setMode] = useState<Mode>('ai');
+  const [saving, setSaving] = useState(false);
+
+  // Deck metadata
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [selectedColor, setSelectedColor] = useState(DECK_COLORS[0]!);
+  const [selectedEmoji, setSelectedEmoji] = useState(DECK_EMOJIS[0]!);
+
+  // AI mode
+  const [aiTopic, setAiTopic] = useState('');
+  const [cardCount, setCardCount] = useState('10');
+  const [generatedCards, setGeneratedCards] = useState<Flashcard[]>([]);
+  const [generating, setGenerating] = useState(false);
+
+  // Manual mode
+  const [manualCards, setManualCards] = useState<Flashcard[]>([]);
+  const [newFront, setNewFront] = useState('');
+  const [newBack, setNewBack] = useState('');
+
+  const cards = mode === 'ai' ? generatedCards : manualCards;
+
+  const handleGenerate = async () => {
+    if (!aiTopic.trim()) {
+      Alert.alert('Atenção', 'Digite um tópico para gerar os cards.');
+      return;
+    }
+    setGenerating(true);
+    try {
+      const count = Math.min(Math.max(parseInt(cardCount, 10) || 10, 1), 30);
+      const raw = await generateFlashcards(aiTopic, count);
+      setGeneratedCards(raw.map(c => makeFlashcard(c.front, c.back)));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro desconhecido';
+      Alert.alert('Erro ao gerar cards', msg);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handlePickFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/plain', 'application/pdf'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+      const file = result.assets[0];
+      if (!file) return;
+      if (file.mimeType === 'text/plain') {
+        const text = await FileSystem.readAsStringAsync(file.uri);
+        setAiTopic(text.slice(0, 3000));
+      } else {
+        Alert.alert(
+          'Arquivo selecionado',
+          `"${file.name}" foi selecionado. Adicione uma descrição do conteúdo para gerar os cards.`,
+        );
+      }
+    } catch {
+      Alert.alert('Erro', 'Não foi possível ler o arquivo.');
+    }
+  };
+
+  const handleAddManualCard = () => {
+    if (!newFront.trim() || !newBack.trim()) return;
+    setManualCards(c => [
+      ...c,
+      makeFlashcard(newFront.trim(), newBack.trim()),
+    ]);
+    setNewFront('');
+    setNewBack('');
+  };
+
+  const handleRemoveCard = (id: string) => {
+    if (mode === 'ai') {
+      setGeneratedCards(c => c.filter(x => x.id !== id));
+    } else {
+      setManualCards(c => c.filter(x => x.id !== id));
+    }
+  };
+
+  const handleSave = async () => {
+    if (!title.trim()) {
+      Alert.alert('Atenção', 'Dê um título ao deck.');
+      return;
+    }
+    if (cards.length === 0) {
+      Alert.alert(
+        'Atenção',
+        mode === 'ai'
+          ? 'Gere os cards antes de salvar.'
+          : 'Adicione pelo menos um card.',
+      );
+      return;
+    }
+    setSaving(true);
+    try {
+      await createDeck({
+        title: title.trim(),
+        emoji: selectedEmoji,
+        color: selectedColor,
+        sourceType: mode === 'ai' ? 'ai' : 'manual',
+        cards: cards.map(c => ({ front: c.front, back: c.back })),
+      });
+      router.back();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro ao salvar o deck.';
+      Alert.alert('Erro', msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <SafeAreaView className="flex-1 bg-background">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        className="flex-1"
+      >
+        {/* Header */}
+        <View className="flex-row items-center px-4 pt-2 pb-4 border-b border-outline-variant/20">
+          <TouchableOpacity onPress={() => router.back()} className="p-2">
+            <Ionicons name="close" size={24} color={colors.onSurface} />
+          </TouchableOpacity>
+          <Text className="flex-1 text-center text-on-surface font-jakarta-bold text-lg">
+            Novo deck
+          </Text>
+          <TouchableOpacity
+            onPress={() => void handleSave()}
+            className="p-2"
+            disabled={saving}
+          >
+            <Text className="text-primary font-inter-semibold text-base">
+              {saving ? 'Salvando...' : 'Salvar'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{
+            paddingHorizontal: 24,
+            paddingVertical: 20,
+            gap: 20,
+          }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Title & description */}
+          <View className="gap-4">
+            <Input
+              label="Título do deck *"
+              placeholder="Ex: Biologia Celular, React Hooks..."
+              value={title}
+              onChangeText={setTitle}
+            />
+            <Input
+              label="Descrição (opcional)"
+              placeholder="Breve descrição do conteúdo..."
+              value={description}
+              onChangeText={setDescription}
+            />
+          </View>
+
+          {/* Emoji picker */}
+          <View className="gap-2">
+            <Text className="text-on-surface-variant font-inter-medium text-sm">
+              Ícone
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View className="flex-row gap-2">
+                {DECK_EMOJIS.map(e => (
+                  <TouchableOpacity
+                    key={e}
+                    onPress={() => setSelectedEmoji(e)}
+                    className={`w-10 h-10 rounded-xl items-center justify-center ${
+                      selectedEmoji === e
+                        ? 'bg-primary/20 border border-primary'
+                        : 'bg-surface-container-high'
+                    }`}
+                  >
+                    <Text className="text-xl">{e}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+
+          {/* Color picker */}
+          <View className="gap-2">
+            <Text className="text-on-surface-variant font-inter-medium text-sm">
+              Cor
+            </Text>
+            <View className="flex-row gap-3 flex-wrap">
+              {DECK_COLORS.map(c => (
+                <TouchableOpacity
+                  key={c}
+                  onPress={() => setSelectedColor(c)}
+                  className={`w-9 h-9 rounded-full border-2 ${
+                    selectedColor === c
+                      ? 'border-on-surface scale-110'
+                      : 'border-transparent'
+                  }`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </View>
+          </View>
+
+          {/* Mode tabs */}
+          <View className="bg-surface-container-high rounded-card p-1 flex-row">
+            {(['ai', 'manual'] as Mode[]).map(m => (
+              <TouchableOpacity
+                key={m}
+                onPress={() => setMode(m)}
+                className={`flex-1 py-2.5 rounded-xl items-center ${
+                  mode === m ? 'bg-primary-container' : ''
+                }`}
+              >
+                <Text
+                  className={`font-inter-semibold text-sm ${
+                    mode === m
+                      ? 'text-on-primary-container'
+                      : 'text-outline'
+                  }`}
+                >
+                  {m === 'ai' ? '✨ Gerar com IA' : '✏️ Manual'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* AI Mode */}
+          {mode === 'ai' && (
+            <View className="gap-4">
+              <Input
+                label="Tópico ou conteúdo"
+                placeholder="Ex: Fotossíntese, Hooks do React, Segunda Guerra Mundial..."
+                value={aiTopic}
+                onChangeText={setAiTopic}
+                multiline
+                numberOfLines={5}
+                style={{ height: 110, textAlignVertical: 'top', paddingTop: 12 }}
+              />
+              <View className="flex-row gap-3 items-end">
+                <View className="flex-1">
+                  <Input
+                    label="Quantidade de cards"
+                    placeholder="10"
+                    value={cardCount}
+                    onChangeText={setCardCount}
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <Button
+                  variant="outline"
+                  size="md"
+                  onPress={() => void handlePickFile()}
+                >
+                  📄 Arquivo
+                </Button>
+              </View>
+              <Button
+                variant="primary"
+                size="lg"
+                onPress={() => void handleGenerate()}
+                loading={generating}
+              >
+                {generating ? 'Gerando cards...' : '✨ Gerar flashcards'}
+              </Button>
+            </View>
+          )}
+
+          {/* Manual Mode */}
+          {mode === 'manual' && (
+            <View className="gap-3">
+              <Input
+                label="Frente do card"
+                placeholder="Pergunta ou conceito..."
+                value={newFront}
+                onChangeText={setNewFront}
+              />
+              <Input
+                label="Verso do card"
+                placeholder="Resposta ou explicação..."
+                value={newBack}
+                onChangeText={setNewBack}
+                multiline
+                numberOfLines={3}
+                style={{ height: 80, textAlignVertical: 'top', paddingTop: 12 }}
+              />
+              <Button
+                variant="secondary"
+                size="md"
+                onPress={handleAddManualCard}
+                disabled={!newFront.trim() || !newBack.trim()}
+              >
+                + Adicionar card
+              </Button>
+            </View>
+          )}
+
+          {/* Cards preview */}
+          {cards.length > 0 && (
+            <View className="gap-3">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-on-surface font-jakarta-bold text-base">
+                  {mode === 'ai' ? 'Cards gerados' : 'Cards'} ({cards.length})
+                </Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    mode === 'ai'
+                      ? setGeneratedCards([])
+                      : setManualCards([])
+                  }
+                >
+                  <Text className="text-error font-inter-medium text-xs">
+                    Limpar tudo
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {cards.map((card, i) => (
+                <View
+                  key={card.id}
+                  className="bg-surface-container rounded-card p-4 border border-outline-variant/20 gap-2"
+                >
+                  <View className="flex-row items-start gap-2">
+                    <Text className="text-outline font-inter-regular text-xs mt-0.5">
+                      {i + 1}.
+                    </Text>
+                    <View className="flex-1">
+                      <Text className="text-on-surface font-inter-medium text-sm leading-5">
+                        {card.front}
+                      </Text>
+                      <Text className="text-outline font-inter-regular text-xs mt-1.5 leading-4">
+                        {card.back}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => handleRemoveCard(card.id)}
+                      className="p-1"
+                    >
+                      <Ionicons
+                        name="close-circle"
+                        size={18}
+                        color={colors.outline}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
