@@ -6,9 +6,11 @@ import { format, subDays, isSameDay } from 'date-fns';
 import { db } from '@/services/database';
 import type { StudySession } from '@/types';
 import { StreakBadge } from '@/components/StreakBadge';
+import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { useStreak } from '@/hooks/useStreak';
 import { useAuth } from '@/contexts/AuthContext';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { levelFromXp } from '@/utils/xp';
 
 const BAR_WIDTH = 28;
 const BAR_GAP = 10;
@@ -25,7 +27,7 @@ export default function ProgressScreen() {
 
   useEffect(() => {
     if (!user) return;
-    void db.sessions.getRecent(user.id, 50).then(setSessions);
+    void db.sessions.getRecent(user.id, 365).then(setSessions);
   }, [user]);
 
   const last7Days = Array.from({ length: DAYS }, (_, i) =>
@@ -47,6 +49,15 @@ export default function ProgressScreen() {
 
   const chartWidth = DAYS * (BAR_WIDTH + BAR_GAP) - BAR_GAP;
 
+  const level = levelFromXp(totalCards);
+
+  // Cards por dia (chave 'yyyy-MM-dd') para o heatmap de atividade.
+  const heatmapCounts = sessions.reduce<Record<string, number>>((acc, s) => {
+    const key = format(new Date(s.date), 'yyyy-MM-dd');
+    acc[key] = (acc[key] ?? 0) + s.total;
+    return acc;
+  }, {});
+
   return (
     <SafeAreaView className="flex-1 bg-background">
       <ScrollView
@@ -60,6 +71,27 @@ export default function ProgressScreen() {
             Progresso
           </Text>
           <StreakBadge streak={streak} size="md" />
+        </View>
+
+        {/* Nível / XP */}
+        <View className="mx-6 mb-4 bg-surface-container rounded-card p-5 border border-outline-variant/20">
+          <View className="flex-row items-center justify-between mb-3">
+            <View className="flex-row items-center gap-2">
+              <Text className="text-2xl">⭐</Text>
+              <Text className="text-on-surface font-jakarta-bold text-lg">
+                Nível {level.level}
+              </Text>
+            </View>
+            <Text className="text-outline font-inter-medium text-xs">
+              {level.xpIntoLevel} / {level.xpForLevel} XP
+            </Text>
+          </View>
+          <View className="h-2 bg-surface-container-high rounded-full overflow-hidden">
+            <View
+              className="h-full rounded-full bg-primary-container"
+              style={{ width: `${Math.round(level.progress * 100)}%` }}
+            />
+          </View>
         </View>
 
         {/* Weekly Chart */}
@@ -119,6 +151,14 @@ export default function ProgressScreen() {
               </View>
             ))}
           </View>
+        </View>
+
+        {/* Heatmap de atividade */}
+        <View className="mx-6 mt-4 bg-surface-container rounded-card p-5 border border-outline-variant/20">
+          <Text className="text-on-surface font-jakarta-bold text-base mb-4">
+            Atividade
+          </Text>
+          <ActivityHeatmap counts={heatmapCounts} />
         </View>
 
         {/* Stats grid */}

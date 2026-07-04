@@ -18,6 +18,7 @@ import {
 } from '@expo-google-fonts/inter';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { SettingsProvider, useSettings } from '@/contexts/SettingsContext';
+import { OnboardingProvider, useOnboarding } from '@/contexts/OnboardingContext';
 import { resolveAccent, hexToTriplet } from '@/constants/accents';
 import { syncReminders } from '@/services/notifications';
 import '../global.css';
@@ -118,21 +119,26 @@ function ThemeVarsView({ children }: { children: ReactNode }) {
 
 function RootNavigator() {
   const { session, loading } = useAuth();
+  const { done: onboardingDone } = useOnboarding();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || onboardingDone === null) return;
     const inAuthGroup = segments[0] === '(auth)';
+    const inOnboarding = segments[0] === 'onboarding';
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login');
-    } else if (session && inAuthGroup) {
+    } else if (session && !onboardingDone && !inOnboarding) {
+      // Primeira execução autenticada: mostra o onboarding uma única vez.
+      router.replace('/onboarding');
+    } else if (session && onboardingDone && (inAuthGroup || inOnboarding)) {
       router.replace('/(tabs)');
     }
-  }, [session, loading, segments, router]);
+  }, [session, loading, onboardingDone, segments, router]);
 
-  if (loading) {
+  if (loading || onboardingDone === null) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
         <ActivityIndicator size="large" color="#d2bbff" />
@@ -181,6 +187,11 @@ function RootNavigator() {
         name="settings"
         options={{ animation: 'slide_from_right' }}
       />
+      <Stack.Screen
+        name="achievements"
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
     </Stack>
   );
 }
@@ -211,7 +222,9 @@ export default function RootLayout() {
         <NotificationController />
         <ThemeVarsView>
           <AuthProvider>
-            <RootNavigator />
+            <OnboardingProvider>
+              <RootNavigator />
+            </OnboardingProvider>
           </AuthProvider>
         </ThemeVarsView>
       </SettingsProvider>

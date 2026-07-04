@@ -42,6 +42,12 @@
       "expo-asset",
       "expo-secure-store",
       "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O Recall usa suas fotos para você escolher uma imagem de perfil."
+        }
+      ],
       "@react-native-community/datetimepicker"
     ],
     "experiments": {

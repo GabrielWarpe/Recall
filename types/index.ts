@@ -45,3 +45,6 @@ export interface StudyResult {
 }
 
 export type StudyPhase = 'idle' | 'studying' | 'finished';
+
+/** Nível de avaliação de um card na revisão (estilo Anki). */
+export type Grade = 'again' | 'hard' | 'good' | 'easy';

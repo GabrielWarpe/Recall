@@ -1,4 +1,4 @@
-import type { Flashcard, Deck } from '@/types';
+import type { Flashcard, Deck, Grade } from '@/types';
 import { storage } from './storage';
 
 interface GeneratedCard {
@@ -77,21 +77,33 @@ export function makeFlashcard(front: string, back: string): Flashcard {
   };
 }
 
-// Simplified SM-2 algorithm
-export function reviewCard(card: Flashcard, correct: boolean): Flashcard {
+/**
+ * SM-2 com avaliação de 4 níveis (De novo / Difícil / Bom / Fácil).
+ * Mantém exatamente os mesmos campos persistidos de antes — só a fórmula muda.
+ * O armazenamento do intervalo é em dias; "De novo" reagenda para o dia seguinte
+ * (a re-exibição imediata é tratada pela fila da sessão, não pelo agendamento).
+ */
+export function reviewCard(card: Flashcard, grade: Grade): Flashcard {
   const now = new Date();
   let { interval, repetitions, easeFactor } = card;
 
-  if (correct) {
-    repetitions += 1;
-    if (repetitions === 1) interval = 1;
-    else if (repetitions === 2) interval = 6;
-    else interval = Math.round(interval * easeFactor);
-    easeFactor = Math.max(1.3, easeFactor + 0.1);
-  } else {
+  if (grade === 'again') {
     repetitions = 0;
     interval = 1;
     easeFactor = Math.max(1.3, easeFactor - 0.2);
+  } else {
+    repetitions += 1;
+    if (repetitions === 1) {
+      interval = grade === 'easy' ? 4 : 1;
+    } else if (repetitions === 2) {
+      interval = grade === 'hard' ? 3 : 6;
+    } else {
+      const factor =
+        grade === 'hard' ? 1.2 : grade === 'easy' ? easeFactor * 1.3 : easeFactor;
+      interval = Math.max(1, Math.round(interval * factor));
+    }
+    const delta = grade === 'hard' ? -0.15 : grade === 'easy' ? 0.15 : 0;
+    easeFactor = Math.max(1.3, easeFactor + delta);
   }
 
   const nextReview = new Date(now);
@@ -107,11 +119,28 @@ export function reviewCard(card: Flashcard, correct: boolean): Flashcard {
   };
 }
 
+/** Cards já vistos cujo próximo review já venceu (devidos de verdade). */
 export function getDueCards(deck: Pick<Deck, 'cards'>): Flashcard[] {
   const now = new Date();
-  return deck.cards.filter(c => new Date(c.nextReview) <= now);
+  return deck.cards.filter(
+    c => c.repetitions > 0 && new Date(c.nextReview) <= now,
+  );
 }
 
+/** Cards nunca estudados. */
 export function getNewCards(deck: Pick<Deck, 'cards'>): Flashcard[] {
   return deck.cards.filter(c => c.repetitions === 0);
+}
+
+/**
+ * Monta a lista de uma sessão de repetição espaçada: todos os cards devidos +
+ * até `newLimit` cards novos. Se `newLimit` for 0 ou negativo, não inclui novos.
+ */
+export function getSessionCards(
+  deck: Pick<Deck, 'cards'>,
+  newLimit: number,
+): Flashcard[] {
+  const due = getDueCards(deck);
+  const news = newLimit > 0 ? getNewCards(deck).slice(0, newLimit) : [];
+  return [...due, ...news];
 }

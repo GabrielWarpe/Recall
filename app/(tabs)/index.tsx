@@ -2,25 +2,26 @@ import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { useDecks } from '@/hooks/useDecks';
 import { useStreak } from '@/hooks/useStreak';
+import { getSessionCards } from '@/services/ai';
 import { DeckCard } from '@/components/DeckCard';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ProgressRing } from '@/components/ProgressRing';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/contexts/AuthContext';
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { useSettings } from '@/contexts/SettingsContext';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { profile } = useAuth();
-  const colors = useThemeColors();
+  const { settings } = useSettings();
   const { decks } = useDecks();
   const { streak, todayCount } = useStreak();
 
   const DAILY_GOAL = profile?.daily_goal ?? 20;
   const progress = Math.min(todayCount / DAILY_GOAL, 1);
+  const goalMet = todayCount >= DAILY_GOAL && todayCount > 0;
 
   // Deck para a CTA "Estudar agora": o estudado mais recentemente, ou o primeiro.
   const recentDeck = [...decks]
@@ -30,6 +31,14 @@ export default function HomeScreen() {
       const bt = b.lastStudied ? new Date(b.lastStudied).getTime() : 0;
       return bt - at;
     })[0];
+
+  // Cards da sessão de hoje (devidos + novos limitados) somados e por deck.
+  const dueOf = (d: (typeof decks)[number]) =>
+    getSessionCards(d, settings.newPerSession).length;
+  const dueCount = decks.reduce((sum, d) => sum + dueOf(d), 0);
+  const topDueDeck = [...decks]
+    .filter(d => dueOf(d) > 0)
+    .sort((a, b) => dueOf(b) - dueOf(a))[0];
 
   const hour = new Date().getHours();
   const greeting =
@@ -52,15 +61,7 @@ export default function HomeScreen() {
               Recall
             </Text>
           </View>
-          <View className="flex-row items-center gap-3">
-            <StreakBadge streak={streak} />
-            <TouchableOpacity
-              onPress={() => router.push('/settings')}
-              className="w-9 h-9 items-center justify-center rounded-xl bg-surface-container"
-            >
-              <Ionicons name="settings-outline" size={18} color={colors.outline} />
-            </TouchableOpacity>
-          </View>
+          <StreakBadge streak={streak} />
         </View>
 
         {/* Daily Goal Card */}
@@ -68,10 +69,12 @@ export default function HomeScreen() {
           <View className="flex-row items-center gap-4">
             <View className="flex-1">
               <Text className="text-on-surface font-jakarta-bold text-lg">
-                Meta diária
+                {goalMet ? 'Meta batida! 🎉' : 'Meta diária'}
               </Text>
               <Text className="text-outline font-inter-regular text-sm mt-1">
-                {todayCount} de {DAILY_GOAL} cards estudados
+                {goalMet
+                  ? `${todayCount} cards hoje — mandou bem!`
+                  : `${todayCount} de ${DAILY_GOAL} cards estudados`}
               </Text>
               <View className="h-2 bg-surface-container-high rounded-full mt-3 overflow-hidden">
                 <View
@@ -83,22 +86,62 @@ export default function HomeScreen() {
             <ProgressRing
               progress={progress}
               size={72}
-              label={`${Math.round(progress * 100)}%`}
+              label={goalMet ? '✓' : `${Math.round(progress * 100)}%`}
               sublabel="hoje"
             />
           </View>
         </View>
 
-        {/* Study CTA */}
+        {/* Revisar hoje */}
         {recentDeck != null && (
-          <View className="mx-6 mt-4">
-            <Button
-              variant="primary"
-              size="lg"
-              onPress={() => router.push(`/study/${recentDeck.id}`)}
-            >
-              Estudar agora • {recentDeck.emoji} {recentDeck.title}
-            </Button>
+          <View className="mx-6 mt-4 bg-surface-container rounded-card p-5 border border-outline-variant/20">
+            {dueCount > 0 ? (
+              <>
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-2xl">🔄</Text>
+                  <Text className="text-on-surface font-jakarta-bold text-lg">
+                    Revisar hoje
+                  </Text>
+                </View>
+                <Text className="text-outline font-inter-regular text-sm mt-1">
+                  Você tem{' '}
+                  <Text className="text-primary font-inter-semibold">
+                    {dueCount} {dueCount === 1 ? 'card' : 'cards'}
+                  </Text>{' '}
+                  para revisar.
+                </Text>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="mt-4"
+                  onPress={() =>
+                    router.push(`/study/${(topDueDeck ?? recentDeck).id}`)
+                  }
+                >
+                  Revisar agora
+                </Button>
+              </>
+            ) : (
+              <>
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-2xl">🎉</Text>
+                  <Text className="text-on-surface font-jakarta-bold text-lg">
+                    Tudo em dia!
+                  </Text>
+                </View>
+                <Text className="text-outline font-inter-regular text-sm mt-1">
+                  Nenhuma revisão pendente. Quer adiantar um deck?
+                </Text>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="mt-4"
+                  onPress={() => router.push(`/study/${recentDeck.id}`)}
+                >
+                  Estudar {recentDeck.emoji} {recentDeck.title}
+                </Button>
+              </>
+            )}
           </View>
         )}
 

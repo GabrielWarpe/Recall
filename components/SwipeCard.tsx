@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { FlashCard } from './FlashCard';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useThemeColors } from '@/hooks/useThemeColors';
-import type { Flashcard } from '@/types';
+import type { Flashcard, Grade } from '@/types';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 48;
@@ -25,17 +25,48 @@ interface SwipeCardProps {
   card: Flashcard;
   index: number;
   total: number;
-  onCorrect: () => void;
-  onIncorrect: () => void;
+  onGrade: (grade: Grade) => void;
   onSkip: () => void;
 }
 
-export function SwipeCard({
-  card,
-  onCorrect,
-  onIncorrect,
-  onSkip,
-}: SwipeCardProps) {
+const GRADE_BUTTONS: {
+  grade: Grade;
+  label: string;
+  bg: string;
+  border: string;
+  text: string;
+}[] = [
+  {
+    grade: 'again',
+    label: 'De novo',
+    bg: 'bg-error/20',
+    border: 'border-error/40',
+    text: 'text-error',
+  },
+  {
+    grade: 'hard',
+    label: 'Difícil',
+    bg: 'bg-tertiary/20',
+    border: 'border-tertiary/40',
+    text: 'text-tertiary',
+  },
+  {
+    grade: 'good',
+    label: 'Bom',
+    bg: 'bg-primary-container/25',
+    border: 'border-primary/40',
+    text: 'text-primary',
+  },
+  {
+    grade: 'easy',
+    label: 'Fácil',
+    bg: 'bg-green-500/20',
+    border: 'border-green-500/40',
+    text: 'text-green-400',
+  },
+];
+
+export function SwipeCard({ card, onGrade, onSkip }: SwipeCardProps) {
   const { settings } = useSettings();
   const colors = useThemeColors();
   const [isFlipped, setIsFlipped] = useState(false);
@@ -51,21 +82,33 @@ export function SwipeCard({
     return () => clearTimeout(t);
   }, [settings.autoReveal, isFlipped]);
 
-  const triggerCorrect = () => {
+  const triggerGrade = (g: Grade) => {
     if (settings.feedbackSounds) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const type =
+        g === 'again' || g === 'hard'
+          ? Haptics.NotificationFeedbackType.Warning
+          : Haptics.NotificationFeedbackType.Success;
+      void Haptics.notificationAsync(type);
     }
-    onCorrect();
+    onGrade(g);
   };
 
-  const triggerIncorrect = () => {
-    if (settings.feedbackSounds) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    }
-    onIncorrect();
+  // Anima o card para fora e dispara a avaliação: "De novo" sai à esquerda,
+  // os demais à direita.
+  const flyOut = (g: Grade) => {
+    const toRight = g !== 'again';
+    translateX.value = withTiming(
+      (toRight ? 1 : -1) * width * 1.6,
+      { duration: exitDuration },
+      finished => {
+        'worklet';
+        if (finished) runOnJS(triggerGrade)(g);
+      },
+    );
   };
 
   // O arraste só é habilitado após virar o card — e se os gestos estiverem ativos.
+  // Esquerda = "De novo", direita = "Bom" (atalhos; os 4 níveis ficam nos botões).
   const pan = Gesture.Pan()
     .enabled(isFlipped && settings.swipeGestures)
     .onUpdate(e => {
@@ -78,7 +121,7 @@ export function SwipeCard({
           width * 1.6,
           { duration: exitDuration },
           () => {
-            runOnJS(triggerCorrect)();
+            runOnJS(triggerGrade)('good');
           },
         );
       } else if (e.translationX < -SWIPE_THRESHOLD) {
@@ -86,7 +129,7 @@ export function SwipeCard({
           -width * 1.6,
           { duration: exitDuration },
           () => {
-            runOnJS(triggerIncorrect)();
+            runOnJS(triggerGrade)('again');
           },
         );
       } else {
@@ -111,7 +154,7 @@ export function SwipeCard({
     };
   });
 
-  const correctOverlayStyle = useAnimatedStyle(() => ({
+  const goodOverlayStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
       translateX.value,
       [0, SWIPE_THRESHOLD * 0.5],
@@ -120,7 +163,7 @@ export function SwipeCard({
     ),
   }));
 
-  const incorrectOverlayStyle = useAnimatedStyle(() => ({
+  const againOverlayStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
       translateX.value,
       [-SWIPE_THRESHOLD * 0.5, 0],
@@ -129,27 +172,14 @@ export function SwipeCard({
     ),
   }));
 
-  // Alternativa ao arraste: ao tocar nos botões, o card voa para o lado
-  // correspondente com a mesma animação e dispara a resposta.
-  const flyOut = (toRight: boolean) => {
-    translateX.value = withTiming(
-      (toRight ? 1 : -1) * width * 1.6,
-      { duration: exitDuration },
-      finished => {
-        'worklet';
-        if (finished) runOnJS(toRight ? triggerCorrect : triggerIncorrect)();
-      },
-    );
-  };
-
   return (
     <View className="items-center w-full">
       <GestureDetector gesture={pan}>
         <Animated.View style={cardStyle}>
-          {/* Correct overlay */}
+          {/* Overlay "Bom" (direita) */}
           <Animated.View
             style={[
-              correctOverlayStyle,
+              goodOverlayStyle,
               { position: 'absolute', top: 24, left: 20, zIndex: 10 },
             ]}
             className="bg-green-500/25 border-2 border-green-400 rounded-xl px-4 py-2"
@@ -159,14 +189,14 @@ export function SwipeCard({
               className="text-green-400 font-jakarta-bold text-lg"
               style={{ transform: [{ rotate: '-12deg' }] }}
             >
-              SABIA! ✓
+              BOM ✓
             </Text>
           </Animated.View>
 
-          {/* Incorrect overlay */}
+          {/* Overlay "De novo" (esquerda) */}
           <Animated.View
             style={[
-              incorrectOverlayStyle,
+              againOverlayStyle,
               { position: 'absolute', top: 24, right: 20, zIndex: 10 },
             ]}
             className="bg-error/25 border-2 border-error rounded-xl px-4 py-2"
@@ -176,7 +206,7 @@ export function SwipeCard({
               className="text-error font-jakarta-bold text-lg"
               style={{ transform: [{ rotate: '12deg' }] }}
             >
-              ERREI ✗
+              DE NOVO ↺
             </Text>
           </Animated.View>
 
@@ -220,44 +250,30 @@ export function SwipeCard({
           </View>
         ) : (
           <View className="gap-4">
-            <View className="flex-row items-center justify-between">
-              {/* Errei (esquerda) — toque ou arraste para a esquerda */}
-              <TouchableOpacity
-                onPress={() => flyOut(false)}
-                activeOpacity={0.7}
-                className="items-center gap-1.5"
-              >
-                <View className="w-12 h-12 rounded-full bg-error/20 border border-error/40 items-center justify-center">
-                  <Ionicons name="close" size={24} color={colors.error} />
-                </View>
-                <Text className="text-error font-inter-medium text-xs">
-                  Errei
-                </Text>
-              </TouchableOpacity>
-
-              <Text className="text-outline font-inter-regular text-xs text-center flex-1 mx-2">
-                Arraste ou toque{'\n'}para avaliar
-              </Text>
-
-              {/* Sabia (direita) — toque ou arraste para a direita */}
-              <TouchableOpacity
-                onPress={() => flyOut(true)}
-                activeOpacity={0.7}
-                className="items-center gap-1.5"
-              >
-                <View className="w-12 h-12 rounded-full bg-green-500/20 border border-green-500/40 items-center justify-center">
-                  <Ionicons name="checkmark" size={24} color="#4ade80" />
-                </View>
-                <Text className="text-green-400 font-inter-medium text-xs">
-                  Sabia
-                </Text>
-              </TouchableOpacity>
+            {/* 4 níveis de avaliação */}
+            <View className="flex-row gap-2">
+              {GRADE_BUTTONS.map(b => (
+                <TouchableOpacity
+                  key={b.grade}
+                  onPress={() => flyOut(b.grade)}
+                  activeOpacity={0.75}
+                  className={`flex-1 rounded-button py-3 items-center border ${b.bg} ${b.border}`}
+                >
+                  <Text className={`font-inter-semibold text-sm ${b.text}`}>
+                    {b.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
+
+            <Text className="text-outline font-inter-regular text-xs text-center">
+              Arraste ← para "De novo" ou → para "Bom"
+            </Text>
 
             <TouchableOpacity
               onPress={onSkip}
               activeOpacity={0.7}
-              className="py-2 flex-row items-center justify-center gap-1.5"
+              className="py-1 flex-row items-center justify-center gap-1.5"
             >
               <Ionicons
                 name="play-skip-forward-outline"

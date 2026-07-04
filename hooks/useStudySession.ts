@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import type { Flashcard, Deck, StudyResult, StudyPhase } from '@/types';
+import type { Flashcard, Deck, Grade, StudyPhase } from '@/types';
 import { reviewCard } from '@/services/ai';
 import { db } from '@/services/database';
 import { fireStreakNotification } from '@/services/notifications';
@@ -7,15 +7,23 @@ import { checkAchievements } from '@/services/achievements';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 
+/**
+ * Sessão de estudo com fila. Cada card é concluído uma única vez (ao receber
+ * Difícil/Bom/Fácil). "De novo" reenfileira o card ao fim da sessão, então ele
+ * reaparece — como nos passos de aprendizagem do Anki. As contagens satisfazem
+ * sempre: done = correctCount + hardCount (cada conclusão é uma coisa ou outra);
+ * againCount conta as repetições e não entra em `done`.
+ */
 export function useStudySession(deck: Deck | null) {
   const { user, refreshProfile } = useAuth();
   const { settings } = useSettings();
   const [phase, setPhase] = useState<StudyPhase>('idle');
-  const [cards, setCards] = useState<Flashcard[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [results, setResults] = useState<StudyResult[]>([]);
+  const [queue, setQueue] = useState<Flashcard[]>([]);
+  const [total, setTotal] = useState(0);
+  const [done, setDone] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
-  const [incorrectCount, setIncorrectCount] = useState(0);
+  const [hardCount, setHardCount] = useState(0);
+  const [againCount, setAgainCount] = useState(0);
   const startTimeRef = useRef<number>(0);
 
   const start = useCallback(
@@ -23,23 +31,22 @@ export function useStudySession(deck: Deck | null) {
       const ordered = settings.shuffle
         ? [...studyCards].sort(() => Math.random() - 0.5)
         : [...studyCards];
-      setCards(ordered);
-      setCurrentIndex(0);
-      setResults([]);
+      setQueue(ordered);
+      setTotal(ordered.length);
+      setDone(0);
       setCorrectCount(0);
-      setIncorrectCount(0);
+      setHardCount(0);
+      setAgainCount(0);
       setPhase('studying');
       startTimeRef.current = Date.now();
     },
     [settings.shuffle],
   );
 
-  // Encerra a sessão salvando apenas os cards realmente respondidos
-  // (cards pulados não contam para revisados/acertos/erros).
+  // Encerra a sessão gravando o registro (só se algum card foi concluído).
   const finalize = useCallback(
-    (finalCorrect: number, finalIncorrect: number) => {
-      const answered = finalCorrect + finalIncorrect;
-      if (deck && user && answered > 0) {
+    (reviewed: number, correct: number, hard: number) => {
+      if (deck && user && reviewed > 0) {
         const startedAt = new Date(startTimeRef.current).toISOString();
         void (async () => {
           await db.sessions.create({
@@ -47,9 +54,9 @@ export function useStudySession(deck: Deck | null) {
             playlist_id: deck.id,
             started_at: startedAt,
             ended_at: new Date().toISOString(),
-            cards_reviewed: answered,
-            correct_count: finalCorrect,
-            hard_count: finalIncorrect,
+            cards_reviewed: reviewed,
+            correct_count: correct,
+            hard_count: hard,
           });
           await db.decks.touchStudied(deck.id);
 
@@ -57,7 +64,6 @@ export function useStudySession(deck: Deck | null) {
           const after = await db.profile.updateStreak(user.id);
           await refreshProfile();
 
-          // ── Notificação de sequência (ao estender a ofensiva hoje) ──
           if (
             settings.streakAlert &&
             after &&
@@ -67,7 +73,6 @@ export function useStudySession(deck: Deck | null) {
             await fireStreakNotification(after.current_streak);
           }
 
-          // ── Conquistas ──
           const sessions = await db.sessions.getRecent(user.id, 365);
           const playlists = await db.playlists.getAll(user.id);
           await checkAchievements({
@@ -75,7 +80,7 @@ export function useStudySession(deck: Deck | null) {
             totalSessions: sessions.length,
             currentStreak: after?.current_streak ?? 0,
             deckCount: playlists.length,
-            lastAccuracy: Math.round((finalCorrect / answered) * 100),
+            lastAccuracy: Math.round((correct / reviewed) * 100),
           });
         })();
       }
@@ -84,61 +89,67 @@ export function useStudySession(deck: Deck | null) {
     [deck, user, refreshProfile, settings.streakAlert],
   );
 
-  const answer = useCallback(
-    async (correct: boolean) => {
+  // Avalia o card do topo da fila e persiste a revisão SM-2.
+  const grade = useCallback(
+    (g: Grade) => {
       if (!deck || !user) return;
-
-      const idx = currentIndex;
-      const card = cards[idx];
+      const card = queue[0];
       if (!card) return;
 
-      // Persiste a revisão SM-2 do card individual no Supabase.
-      const updatedCard = reviewCard(card, correct);
-      void db.decks.reviewCard(updatedCard);
+      const updated = reviewCard(card, g);
+      void db.decks.reviewCard(updated);
 
-      const nextCorrect = correctCount + (correct ? 1 : 0);
-      const nextIncorrect = incorrectCount + (correct ? 0 : 1);
-      if (correct) setCorrectCount(nextCorrect);
-      else setIncorrectCount(nextIncorrect);
+      const passed = g !== 'again';
+      const rest = queue.slice(1);
+      const nextQueue = passed ? rest : [...rest, card];
 
-      setResults(prev => [...prev, { cardId: card.id, correct }]);
+      const nextCorrect = correctCount + (g === 'good' || g === 'easy' ? 1 : 0);
+      const nextHard = hardCount + (g === 'hard' ? 1 : 0);
+      const nextAgain = againCount + (g === 'again' ? 1 : 0);
+      const nextDone = done + (passed ? 1 : 0);
 
-      if (idx + 1 >= cards.length) finalize(nextCorrect, nextIncorrect);
-      else setCurrentIndex(i => i + 1);
+      setCorrectCount(nextCorrect);
+      setHardCount(nextHard);
+      setAgainCount(nextAgain);
+      setDone(nextDone);
+      setQueue(nextQueue);
+
+      if (nextQueue.length === 0) {
+        finalize(nextDone, nextCorrect, nextHard);
+      }
     },
-    [deck, user, currentIndex, cards, correctCount, incorrectCount, finalize],
+    [deck, user, queue, correctCount, hardCount, againCount, done, finalize],
   );
 
-  // Avança para o próximo card sem registrar resposta nem alterar o SRS.
+  // Pula o card do topo sem registrar resposta nem alterar o SRS.
   const skip = useCallback(() => {
-    if (currentIndex + 1 >= cards.length) {
-      finalize(correctCount, incorrectCount);
-    } else {
-      setCurrentIndex(i => i + 1);
-    }
-  }, [currentIndex, cards.length, correctCount, incorrectCount, finalize]);
+    const rest = queue.slice(1);
+    setQueue(rest);
+    if (rest.length === 0) finalize(done, correctCount, hardCount);
+  }, [queue, done, correctCount, hardCount, finalize]);
 
   const reset = useCallback(() => {
     setPhase('idle');
-    setCards([]);
-    setCurrentIndex(0);
-    setResults([]);
+    setQueue([]);
+    setTotal(0);
+    setDone(0);
     setCorrectCount(0);
-    setIncorrectCount(0);
+    setHardCount(0);
+    setAgainCount(0);
   }, []);
 
-  const currentCard =
-    phase === 'studying' ? (cards[currentIndex] ?? null) : null;
+  const currentCard = phase === 'studying' ? (queue[0] ?? null) : null;
 
   return {
     phase,
     currentCard,
-    currentIndex,
-    total: cards.length,
+    done,
+    total,
     correctCount,
-    incorrectCount,
+    hardCount,
+    againCount,
     start,
-    answer,
+    grade,
     skip,
     reset,
   };

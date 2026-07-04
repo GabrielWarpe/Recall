@@ -6,6 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import type { Deck, Flashcard, StudySession } from '@/types';
 import { db } from '@/services/database';
+import { exportDeck, BackupError } from '@/services/backup';
+import { getSessionCards } from '@/services/ai';
+import { useSettings } from '@/contexts/SettingsContext';
 import { Button } from '@/components/ui/Button';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
@@ -23,6 +26,7 @@ export default function DeckDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const colors = useThemeColors();
+  const { settings } = useSettings();
   const [deck, setDeck] = useState<Deck | null>(null);
   const [attempts, setAttempts] = useState<StudySession[]>([]);
   const [tab, setTab] = useState<Tab>('cards');
@@ -46,13 +50,28 @@ export default function DeckDetailScreen() {
   const accuracies = attempts.map(accuracyOf);
   const best = accuracies.length > 0 ? Math.max(...accuracies) : null;
   const last = accuracies.length > 0 ? accuracies[0]! : null;
+  const dueCount = getSessionCards(deck, settings.newPerSession).length;
 
   const handleMenu = () => {
     Alert.alert(deck.title, undefined, [
       { text: 'Editar deck', onPress: () => router.push(`/deck/edit?id=${deck.id}`) },
+      { text: 'Exportar deck', onPress: () => void handleExport() },
       { text: 'Excluir deck', style: 'destructive', onPress: handleDelete },
       { text: 'Cancelar', style: 'cancel' },
     ]);
+  };
+
+  const handleExport = async () => {
+    if (!deck) return;
+    try {
+      await exportDeck(deck);
+    } catch (e) {
+      if (e instanceof BackupError && e.code === 'EMPTY') {
+        Alert.alert('Deck vazio', 'Adicione cards antes de exportar.');
+      } else {
+        Alert.alert('Erro', 'Não foi possível exportar o deck.');
+      }
+    }
   };
 
   const handleDelete = () => {
@@ -90,6 +109,17 @@ export default function DeckDetailScreen() {
           accent="tertiary"
         />
       </View>
+
+      {/* Revisar hoje */}
+      {dueCount > 0 && (
+        <View className="flex-row items-center gap-1.5 mb-3">
+          <Text className="text-sm">🔄</Text>
+          <Text className="text-on-surface-variant font-inter-medium text-sm">
+            <Text className="text-primary font-inter-semibold">{dueCount}</Text>{' '}
+            {dueCount === 1 ? 'card' : 'cards'} para revisar hoje
+          </Text>
+        </View>
+      )}
 
       {/* Study button */}
       <Button

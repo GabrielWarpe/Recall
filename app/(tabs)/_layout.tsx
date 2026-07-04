@@ -1,16 +1,19 @@
 import { Tabs } from 'expo-router';
-import { View, Text, Platform } from 'react-native';
+import { View, Text, Image, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface TabIconProps {
   name: React.ComponentProps<typeof Ionicons>['name'];
   color: string;
   focused: boolean;
   label: string;
+  /** Se presente, mostra a foto do usuário no lugar do ícone. */
+  avatarUri?: string | null;
 }
 
-function TabIcon({ name, color, focused, label }: TabIconProps) {
+function TabIcon({ name, color, focused, label, avatarUri }: TabIconProps) {
   return (
     <View
       style={{
@@ -20,7 +23,20 @@ function TabIcon({ name, color, focused, label }: TabIconProps) {
         gap: 3,
       }}
     >
-      <Ionicons name={name} size={22} color={color} />
+      {avatarUri ? (
+        <Image
+          source={{ uri: avatarUri }}
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            borderWidth: focused ? 2 : 0,
+            borderColor: color,
+          }}
+        />
+      ) : (
+        <Ionicons name={name} size={22} color={color} />
+      )}
       <Text
         numberOfLines={1}
         style={{
@@ -39,6 +55,7 @@ function TabIcon({ name, color, focused, label }: TabIconProps) {
 
 export default function TabsLayout() {
   const colors = useThemeColors();
+  const { profile } = useAuth();
   return (
     <Tabs
       screenOptions={{
@@ -109,6 +126,7 @@ export default function TabsLayout() {
               color={color}
               focused={focused}
               label="Perfil"
+              avatarUri={profile?.avatar_url}
             />
           ),
         }}

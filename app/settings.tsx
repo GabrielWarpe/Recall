@@ -153,17 +153,6 @@ export default function SettingsScreen() {
         {/* ── Estudo ── */}
         <SettingsSection title="Estudo">
           <SettingsRow
-            icon="repeat"
-            iconColor={colors.primary}
-            title="Algoritmo de repetição"
-            value={settings.algorithm}
-            onPress={() =>
-              pickOption('Algoritmo', ['SM-2', 'FSRS', 'Básico'], v =>
-                update('algorithm', v),
-              )
-            }
-          />
-          <SettingsRow
             icon="flag"
             iconColor="#ffb690"
             title="Meta diária de cartões"
@@ -183,6 +172,7 @@ export default function SettingsScreen() {
             icon="add-circle"
             iconColor="#9ef0b0"
             title="Novos cartões por sessão"
+            subtitle="Quantos cartões inéditos entram em cada revisão"
             value={String(settings.newPerSession)}
             onPress={() =>
               pickOption('Novos por sessão', ['5', '10', '15', '20', '30'], v =>
@@ -301,53 +291,8 @@ export default function SettingsScreen() {
           />
         </SettingsSection>
 
-        {/* ── Dados ── */}
-        <SettingsSection title="Dados">
-          <SettingsRow
-            icon="cloud-upload"
-            iconColor="#7cc6ff"
-            title="Backup automático"
-            toggle={{
-              value: settings.autoBackup,
-              onValueChange: v => update('autoBackup', v),
-            }}
-          />
-          <SettingsRow
-            icon="download"
-            iconColor="#9ef0b0"
-            title="Exportar baralhos"
-            onPress={() =>
-              pickOption('Exportar como', ['.apkg', 'CSV', 'JSON'], () => soon())
-            }
-          />
-          <SettingsRow
-            icon="cloud-download"
-            iconColor={colors.primary}
-            title="Importar baralhos"
-            onPress={soon}
-          />
-          <SettingsRow
-            icon="wifi"
-            iconColor="#ffb690"
-            title="Baixar apenas no Wi-Fi"
-            toggle={{
-              value: settings.wifiOnly,
-              onValueChange: v => update('wifiOnly', v),
-            }}
-          />
-        </SettingsSection>
-
         {/* ── Acessibilidade ── */}
         <SettingsSection title="Acessibilidade">
-          <SettingsRow
-            icon="contrast-outline"
-            iconColor={colors.primary}
-            title="Alto contraste"
-            toggle={{
-              value: settings.highContrast,
-              onValueChange: v => update('highContrast', v),
-            }}
-          />
           <SettingsRow
             icon="pause-circle"
             iconColor="#ffb690"
@@ -372,35 +317,10 @@ export default function SettingsScreen() {
         {/* ── App ── */}
         <SettingsSection title="App">
           <SettingsRow
-            icon="globe"
-            iconColor="#7cc6ff"
-            title="Idioma do app"
-            value={settings.appLang}
-            onPress={() =>
-              pickOption(
-                'Idioma do app',
-                ['Português (BR)', 'English (US)', 'Español'],
-                v => update('appLang', v),
-              )
-            }
-          />
-          <SettingsRow
-            icon="star"
-            iconColor="#ffd479"
-            title="Avaliar o app"
-            onPress={soon}
-          />
-          <SettingsRow
             icon="share-social"
             iconColor={colors.primary}
             title="Compartilhar app"
             onPress={handleShare}
-          />
-          <SettingsRow
-            icon="help-circle"
-            iconColor="#9ef0b0"
-            title="Central de ajuda"
-            onPress={soon}
           />
           <SettingsRow
             icon="chatbox-ellipses"
@@ -411,18 +331,6 @@ export default function SettingsScreen() {
                 'mailto:suporte@recall.app?subject=Feedback',
               ).catch(soon)
             }
-          />
-          <SettingsRow
-            icon="document-text"
-            iconColor={colors.outline}
-            title="Termos de uso"
-            onPress={soon}
-          />
-          <SettingsRow
-            icon="shield-checkmark"
-            iconColor={colors.outline}
-            title="Política de privacidade"
-            onPress={soon}
           />
           <SettingsRow
             icon="information-circle"

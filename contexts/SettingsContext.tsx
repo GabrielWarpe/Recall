@@ -10,7 +10,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface AppSettings {
   // Estudo
-  algorithm: string;
   newPerSession: number;
   shuffle: boolean;
   autoReveal: boolean;
@@ -24,19 +23,12 @@ export interface AppSettings {
   streakAlert: boolean;
   // Feedback
   feedbackSounds: boolean;
-  // Dados
-  autoBackup: boolean;
-  wifiOnly: boolean;
   // Acessibilidade
-  highContrast: boolean;
   reduceMotion: boolean;
   swipeGestures: boolean;
-  // App
-  appLang: string;
 }
 
 const DEFAULTS: AppSettings = {
-  algorithm: 'SM-2',
   newPerSession: 10,
   shuffle: true,
   autoReveal: false,
@@ -47,12 +39,8 @@ const DEFAULTS: AppSettings = {
   reminderTime: '20:00',
   streakAlert: false,
   feedbackSounds: true,
-  autoBackup: true,
-  wifiOnly: false,
-  highContrast: false,
   reduceMotion: false,
   swipeGestures: true,
-  appLang: 'Português (BR)',
 };
 
 const STORAGE_KEY = 'recall_app_settings';

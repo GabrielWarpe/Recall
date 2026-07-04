@@ -1,8 +1,19 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Switch, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Switch,
+  Alert,
+  Image,
+  Modal,
+  TextInput,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { db } from '@/services/database';
 import { ensureNotificationPermission } from '@/services/notifications';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,6 +21,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useStreak } from '@/hooks/useStreak';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { GoalSlider } from '@/components/GoalSlider';
+import { ACHIEVEMENTS, getUnlocked } from '@/services/achievements';
 
 const GOAL_MIN = 10;
 const GOAL_MAX = 150;
@@ -39,12 +51,67 @@ export default function ProfileScreen() {
     await refreshProfile();
   };
 
-  // Cards dominados; recarrega ao focar a aba (após sessões de estudo).
+  // ── Edição de nome ─────────────────────────────────────────────────────────
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+
+  const openEditName = () => {
+    setNameDraft(profile?.name ?? '');
+    setEditingName(true);
+  };
+
+  const saveName = async () => {
+    const trimmed = nameDraft.trim();
+    if (!user || trimmed.length === 0) {
+      setEditingName(false);
+      return;
+    }
+    try {
+      await db.profile.update(user.id, { name: trimmed });
+      await refreshProfile();
+    } catch {
+      Alert.alert('Erro', 'Não foi possível salvar o nome.');
+    }
+    setEditingName(false);
+  };
+
+  // ── Troca de foto ──────────────────────────────────────────────────────────
+  const [savingAvatar, setSavingAvatar] = useState(false);
+
+  const pickAvatar = async () => {
+    if (!user || savingAvatar) return;
+    // No iOS a galeria usa o PHPicker (não exige permissão de biblioteca).
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.4,
+      base64: true,
+    });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    if (!asset?.base64) return;
+
+    setSavingAvatar(true);
+    try {
+      const dataUri = `data:image/jpeg;base64,${asset.base64}`;
+      await db.profile.update(user.id, { avatar_url: dataUri });
+      await refreshProfile();
+    } catch {
+      Alert.alert('Erro', 'Não foi possível atualizar a foto.');
+    } finally {
+      setSavingAvatar(false);
+    }
+  };
+
+  // Cards dominados + conquistas; recarrega ao focar a aba.
   const [mastered, setMastered] = useState(0);
+  const [achievementsCount, setAchievementsCount] = useState(0);
   useFocusEffect(
     useCallback(() => {
       if (!user) return;
       void db.flashcards.countMastered(user.id).then(setMastered);
+      void getUnlocked().then(ids => setAchievementsCount(ids.length));
     }, [user]),
   );
 
@@ -61,9 +128,6 @@ export default function ProfileScreen() {
     }
     update('studyReminder', value);
   };
-
-  const soon = () =>
-    Alert.alert('Em breve', 'Esta funcionalidade estará disponível em breve.');
 
   const handleSignOut = () => {
     Alert.alert('Sair da conta', 'Deseja realmente sair?', [
@@ -100,19 +164,52 @@ export default function ProfileScreen() {
 
         {/* Avatar com anel + nome */}
         <View className="items-center">
-          <View
-            className="rounded-full p-1"
-            style={{ borderWidth: 3, borderColor: colors.primary }}
+          <TouchableOpacity
+            onPress={pickAvatar}
+            activeOpacity={0.85}
+            disabled={savingAvatar}
+            className="relative"
           >
-            <View className="w-24 h-24 rounded-full bg-primary-container items-center justify-center">
-              <Text className="text-on-primary-container font-jakarta-extrabold text-4xl">
-                {initial}
-              </Text>
+            <View
+              className="rounded-full p-1"
+              style={{ borderWidth: 3, borderColor: colors.primary }}
+            >
+              {profile?.avatar_url ? (
+                <Image
+                  source={{ uri: profile.avatar_url }}
+                  className="w-24 h-24 rounded-full"
+                />
+              ) : (
+                <View className="w-24 h-24 rounded-full bg-primary-container items-center justify-center">
+                  <Text className="text-on-primary-container font-jakarta-extrabold text-4xl">
+                    {initial}
+                  </Text>
+                </View>
+              )}
             </View>
-          </View>
-          <Text className="text-on-surface font-jakarta-extrabold text-2xl mt-4">
-            {name}
-          </Text>
+            {/* Badge de câmera */}
+            <View
+              className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary-container items-center justify-center"
+              style={{ borderWidth: 2, borderColor: colors.background }}
+            >
+              <Ionicons
+                name="camera"
+                size={15}
+                color={colors.onPrimaryContainer}
+              />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={openEditName}
+            activeOpacity={0.7}
+            className="flex-row items-center gap-1.5 mt-4"
+          >
+            <Text className="text-on-surface font-jakarta-extrabold text-2xl">
+              {name}
+            </Text>
+            <Ionicons name="pencil" size={16} color={colors.outline} />
+          </TouchableOpacity>
           {memberSince != null && (
             <Text className="text-outline font-inter-medium text-sm mt-1">
               Membro desde {memberSince}
@@ -202,31 +299,25 @@ export default function ProfileScreen() {
           />
         </View>
 
-        {/* Exportar / Importar */}
-        <View className="flex-row gap-4 mt-4">
-          <TouchableOpacity
-            onPress={soon}
-            activeOpacity={0.8}
-            className="flex-1 flex-row items-center justify-center gap-2 py-3.5 rounded-card"
-            style={{ borderWidth: 1.5, borderColor: colors.primary }}
-          >
-            <Ionicons name="share-outline" size={18} color={colors.primary} />
-            <Text className="text-primary font-inter-semibold text-base">
-              Exportar
+        {/* Conquistas */}
+        <TouchableOpacity
+          onPress={() => router.push('/achievements')}
+          activeOpacity={0.8}
+          className="flex-row items-center gap-3 px-4 py-3.5 bg-surface-container rounded-card border border-outline-variant/20 mt-4"
+        >
+          <View className="w-10 h-10 rounded-xl items-center justify-center bg-surface-container-high">
+            <Ionicons name="trophy-outline" size={20} color={colors.tertiary} />
+          </View>
+          <View className="flex-1">
+            <Text className="text-on-surface font-inter-medium text-[15px]">
+              Conquistas
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={soon}
-            activeOpacity={0.8}
-            className="flex-1 flex-row items-center justify-center gap-2 py-3.5 rounded-card"
-            style={{ borderWidth: 1.5, borderColor: colors.primary }}
-          >
-            <Ionicons name="download-outline" size={18} color={colors.primary} />
-            <Text className="text-primary font-inter-semibold text-base">
-              Importar
+            <Text className="text-outline font-inter-regular text-xs mt-0.5">
+              {achievementsCount} de {ACHIEVEMENTS.length} desbloqueadas
             </Text>
-          </TouchableOpacity>
-        </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.outline} />
+        </TouchableOpacity>
 
         {/* Sair */}
         <TouchableOpacity
@@ -239,6 +330,54 @@ export default function ProfileScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Modal: editar nome */}
+      <Modal
+        visible={editingName}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditingName(false)}
+      >
+        <View className="flex-1 bg-black/50 items-center justify-center px-8">
+          <View className="w-full bg-surface-container-high rounded-card p-5">
+            <Text className="text-on-surface font-jakarta-bold text-lg mb-3">
+              Editar nome
+            </Text>
+            <TextInput
+              value={nameDraft}
+              onChangeText={setNameDraft}
+              placeholder="Seu nome"
+              placeholderTextColor={colors.outline}
+              autoFocus
+              maxLength={40}
+              returnKeyType="done"
+              onSubmitEditing={() => void saveName()}
+              className="bg-surface-container rounded-button px-4 py-3 text-on-surface font-inter-regular text-base"
+              selectionColor={colors.primary}
+            />
+            <View className="flex-row gap-3 mt-4">
+              <TouchableOpacity
+                onPress={() => setEditingName(false)}
+                activeOpacity={0.8}
+                className="flex-1 py-3 rounded-button items-center bg-surface-container"
+              >
+                <Text className="text-outline font-inter-semibold">
+                  Cancelar
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => void saveName()}
+                activeOpacity={0.8}
+                className="flex-1 py-3 rounded-button items-center bg-primary-container"
+              >
+                <Text className="text-on-primary-container font-inter-semibold">
+                  Salvar
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
