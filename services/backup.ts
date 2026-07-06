@@ -15,6 +15,7 @@ interface DeckExport {
   title: string;
   emoji: string;
   color: string;
+  tags?: string[];
   cards: { front: string; back: string }[];
 }
 
@@ -44,6 +45,7 @@ function toDeckExport(d: Deck): DeckExport {
     title: d.title,
     emoji: d.emoji,
     color: d.color,
+    tags: d.tags,
     cards: d.cards.map(c => ({ front: c.front, back: c.back })),
   };
 }
@@ -166,6 +168,15 @@ export async function importDecks(userId: string): Promise<BackupResult | null> 
 
     if (!title || cards.length === 0) continue;
 
+    // Tags são opcionais no arquivo (backups antigos não têm o campo).
+    const tags = Array.isArray(d.tags)
+      ? d.tags
+          .filter((t): t is string => typeof t === 'string')
+          .map(t => t.trim())
+          .filter(t => t.length > 0)
+          .slice(0, 5)
+      : [];
+
     await db.decks.create(
       userId,
       {
@@ -174,6 +185,7 @@ export async function importDecks(userId: string): Promise<BackupResult | null> 
         color:
           typeof d.color === 'string' && d.color ? d.color : DECK_COLORS[0],
         sourceType: 'file',
+        tags,
       },
       cards,
     );

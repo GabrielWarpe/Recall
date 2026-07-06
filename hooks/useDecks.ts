@@ -10,6 +10,7 @@ export interface NewDeckInput {
   emoji: string;
   color: string;
   sourceType: SourceType;
+  tags?: string[];
   cards: { front: string; back: string }[];
 }
 
@@ -51,6 +52,7 @@ export function useDecks() {
           emoji: input.emoji,
           color: input.color,
           sourceType: input.sourceType,
+          tags: input.tags,
         },
         input.cards,
       );

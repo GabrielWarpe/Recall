@@ -94,6 +94,22 @@ export default function DeckDetailScreen() {
 
   const Header = (
     <View>
+      {/* Tags */}
+      {deck.tags.length > 0 && (
+        <View className="flex-row flex-wrap gap-2 mb-4">
+          {deck.tags.map(tag => (
+            <View
+              key={tag}
+              className="bg-surface-container-high rounded-full px-2.5 py-1"
+            >
+              <Text className="text-outline font-inter-medium text-xs">
+                #{tag}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       {/* Stats row */}
       <View className="flex-row gap-3 mb-4">
         <StatChip label="Cards" value={String(deck.cards.length)} />
@@ -121,7 +137,8 @@ export default function DeckDetailScreen() {
         </View>
       )}
 
-      {/* Study button */}
+      {/* Study button — o modo quiz fica na LISTA de decks, de propósito:
+          aqui as respostas dos cards estão visíveis e estragariam o quiz. */}
       <Button
         variant="primary"
         size="lg"

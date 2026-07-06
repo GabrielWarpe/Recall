@@ -14,18 +14,23 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import type { Flashcard } from '@/types';
-import { generateFlashcards, makeFlashcard } from '@/services/ai';
+import {
+  generateFlashcards,
+  generateFlashcardsFromFile,
+  makeFlashcard,
+} from '@/services/ai';
 import { useDecks } from '@/hooks/useDecks';
 import { DECK_COLORS, DECK_EMOJIS } from '@/constants/theme';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { TagInput } from '@/components/TagInput';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 type Mode = 'ai' | 'manual';
 
 export default function CreateDeckScreen() {
   const router = useRouter();
-  const { createDeck } = useDecks();
+  const { createDeck, decks } = useDecks();
   const colors = useThemeColors();
   const [mode, setMode] = useState<Mode>('ai');
   const [saving, setSaving] = useState(false);
@@ -35,12 +40,23 @@ export default function CreateDeckScreen() {
   const [description, setDescription] = useState('');
   const [selectedColor, setSelectedColor] = useState(DECK_COLORS[0]!);
   const [selectedEmoji, setSelectedEmoji] = useState(DECK_EMOJIS[0]!);
+  const [tags, setTags] = useState<string[]>([]);
+
+  // Tags já usadas nos outros decks, como sugestão de 1 toque.
+  const allTags = [...new Set(decks.flatMap(d => d.tags))].sort((a, b) =>
+    a.localeCompare(b, 'pt'),
+  );
 
   // AI mode
   const [aiTopic, setAiTopic] = useState('');
   const [cardCount, setCardCount] = useState('10');
   const [generatedCards, setGeneratedCards] = useState<Flashcard[]>([]);
   const [generating, setGenerating] = useState(false);
+  const [pickedFile, setPickedFile] = useState<{
+    name: string;
+    base64: string;
+    mimeType: string;
+  } | null>(null);
 
   // Manual mode
   const [manualCards, setManualCards] = useState<Flashcard[]>([]);
@@ -50,14 +66,19 @@ export default function CreateDeckScreen() {
   const cards = mode === 'ai' ? generatedCards : manualCards;
 
   const handleGenerate = async () => {
-    if (!aiTopic.trim()) {
-      Alert.alert('Atenção', 'Digite um tópico para gerar os cards.');
+    if (!pickedFile && !aiTopic.trim()) {
+      Alert.alert('Atenção', 'Digite um tópico ou anexe um arquivo.');
       return;
     }
     setGenerating(true);
     try {
       const count = Math.min(Math.max(parseInt(cardCount, 10) || 10, 1), 30);
-      const raw = await generateFlashcards(aiTopic, count);
+      const raw = pickedFile
+        ? await generateFlashcardsFromFile(
+            { base64: pickedFile.base64, mimeType: pickedFile.mimeType },
+            count,
+          )
+        : await generateFlashcards(aiTopic, count);
       setGeneratedCards(raw.map(c => makeFlashcard(c.front, c.back)));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erro desconhecido';
@@ -70,21 +91,42 @@ export default function CreateDeckScreen() {
   const handlePickFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/plain', 'application/pdf'],
+        type: ['text/plain', 'application/pdf', 'image/*'],
         copyToCacheDirectory: true,
       });
       if (result.canceled) return;
       const file = result.assets[0];
       if (!file) return;
+
+      // .txt continua sendo lido como texto no campo de tópico.
       if (file.mimeType === 'text/plain') {
         const text = await FileSystem.readAsStringAsync(file.uri);
         setAiTopic(text.slice(0, 3000));
-      } else {
-        Alert.alert(
-          'Arquivo selecionado',
-          `"${file.name}" foi selecionado. Adicione uma descrição do conteúdo para gerar os cards.`,
-        );
+        setPickedFile(null);
+        return;
       }
+
+      const isPdf = file.mimeType === 'application/pdf';
+      const isImage = file.mimeType?.startsWith('image/') ?? false;
+      if (!isPdf && !isImage) {
+        Alert.alert(
+          'Formato não suportado',
+          'Selecione um PDF, uma imagem ou um arquivo de texto.',
+        );
+        return;
+      }
+      // Limite da API: 32 MB por requisição; o base64 infla ~33%.
+      if (file.size != null && file.size > 24 * 1024 * 1024) {
+        Alert.alert('Arquivo muito grande', 'Escolha um arquivo de até 24 MB.');
+        return;
+      }
+
+      const base64 = await new FileSystem.File(file.uri).base64();
+      setPickedFile({
+        name: file.name,
+        base64,
+        mimeType: file.mimeType ?? (isPdf ? 'application/pdf' : 'image/jpeg'),
+      });
     } catch {
       Alert.alert('Erro', 'Não foi possível ler o arquivo.');
     }
@@ -129,6 +171,7 @@ export default function CreateDeckScreen() {
         emoji: selectedEmoji,
         color: selectedColor,
         sourceType: mode === 'ai' ? 'ai' : 'manual',
+        tags,
         cards: cards.map(c => ({ front: c.front, back: c.back })),
       });
       router.back();
@@ -236,6 +279,13 @@ export default function CreateDeckScreen() {
             </View>
           </View>
 
+          {/* Tags */}
+          <TagInput
+            tags={tags}
+            onChange={setTags}
+            suggestions={allTags}
+          />
+
           {/* Mode tabs */}
           <View className="bg-surface-container-high rounded-card p-1 flex-row">
             {(['ai', 'manual'] as Mode[]).map(m => (
@@ -286,9 +336,42 @@ export default function CreateDeckScreen() {
                   size="md"
                   onPress={() => void handlePickFile()}
                 >
-                  📄 Arquivo
+                  📎 Arquivo
                 </Button>
               </View>
+
+              {pickedFile && (
+                <View className="gap-1">
+                  <View className="flex-row items-center gap-2 bg-surface-container rounded-card px-3 py-2.5 border border-outline-variant/20">
+                    <Ionicons
+                      name={
+                        pickedFile.mimeType === 'application/pdf'
+                          ? 'document-text'
+                          : 'image'
+                      }
+                      size={18}
+                      color={colors.primary}
+                    />
+                    <Text
+                      className="flex-1 text-on-surface font-inter-medium text-sm"
+                      numberOfLines={1}
+                    >
+                      {pickedFile.name}
+                    </Text>
+                    <TouchableOpacity onPress={() => setPickedFile(null)}>
+                      <Ionicons
+                        name="close-circle"
+                        size={18}
+                        color={colors.outline}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                  <Text className="text-outline font-inter-regular text-xs">
+                    Os cards serão gerados a partir deste arquivo.
+                  </Text>
+                </View>
+              )}
+
               <Button
                 variant="primary"
                 size="lg"

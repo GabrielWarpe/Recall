@@ -252,7 +252,7 @@ export default function SettingsScreen() {
             title="Lembrete de estudo"
             subtitle={
               settings.studyReminder
-                ? `Todos os dias às ${settings.reminderTime}`
+                ? `Só quando houver revisões, às ${settings.reminderTime}`
                 : undefined
             }
             toggle={{

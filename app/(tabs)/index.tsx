@@ -187,6 +187,8 @@ export default function HomeScreen() {
                   deck={deck}
                   onPress={() => router.push(`/deck/${deck.id}`)}
                   onStudy={() => router.push(`/study/${deck.id}`)}
+                  onQuiz={() => router.push(`/quiz/${deck.id}`)}
+                  onWrite={() => router.push(`/write/${deck.id}`)}
                 />
               ))}
               <TouchableOpacity

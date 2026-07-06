@@ -2,7 +2,10 @@ import { useState, useCallback, useRef } from 'react';
 import type { Flashcard, Deck, Grade, StudyPhase } from '@/types';
 import { reviewCard } from '@/services/ai';
 import { db } from '@/services/database';
-import { fireStreakNotification } from '@/services/notifications';
+import {
+  fireStreakNotification,
+  syncReminders,
+} from '@/services/notifications';
 import { checkAchievements } from '@/services/achievements';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -82,11 +85,29 @@ export function useStudySession(deck: Deck | null) {
             deckCount: playlists.length,
             lastAccuracy: Math.round((correct / reviewed) * 100),
           });
+
+          // Reagenda os lembretes com as contagens pós-sessão: cards recém
+          // revisados deixam de estar "devidos" nos próximos dias.
+          await syncReminders({
+            studyReminder: settings.studyReminder,
+            reminderTime: settings.reminderTime,
+            streakAlert: settings.streakAlert,
+            userId: user.id,
+            newPerSession: settings.newPerSession,
+          });
         })();
       }
       setPhase('finished');
     },
-    [deck, user, refreshProfile, settings.streakAlert],
+    [
+      deck,
+      user,
+      refreshProfile,
+      settings.streakAlert,
+      settings.studyReminder,
+      settings.reminderTime,
+      settings.newPerSession,
+    ],
   );
 
   // Avalia o card do topo da fila e persiste a revisão SM-2.

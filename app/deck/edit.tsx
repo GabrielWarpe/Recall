@@ -12,20 +12,29 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '@/services/database';
+import { useDecks } from '@/hooks/useDecks';
 import { DECK_COLORS, DECK_EMOJIS } from '@/constants/theme';
 import { Input } from '@/components/ui/Input';
+import { TagInput } from '@/components/TagInput';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 export default function EditDeckScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const colors = useThemeColors();
+  const { decks } = useDecks();
 
   const [title, setTitle] = useState('');
   const [selectedColor, setSelectedColor] = useState(DECK_COLORS[0]!);
   const [selectedEmoji, setSelectedEmoji] = useState(DECK_EMOJIS[0]!);
+  const [tags, setTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Tags dos demais decks, como sugestão de 1 toque.
+  const allTags = [
+    ...new Set(decks.filter(d => d.id !== id).flatMap(d => d.tags)),
+  ].sort((a, b) => a.localeCompare(b, 'pt'));
 
   useEffect(() => {
     if (!id) return;
@@ -34,6 +43,7 @@ export default function EditDeckScreen() {
         setTitle(d.title);
         setSelectedColor(d.color);
         setSelectedEmoji(d.emoji);
+        setTags(d.tags);
       }
       setLoading(false);
     });
@@ -51,6 +61,7 @@ export default function EditDeckScreen() {
         name: title.trim(),
         emoji: selectedEmoji,
         color: selectedColor,
+        tags,
       });
       router.back();
     } catch (e: unknown) {
@@ -143,6 +154,9 @@ export default function EditDeckScreen() {
                 ))}
               </View>
             </View>
+
+            {/* Tags */}
+            <TagInput tags={tags} onChange={setTags} suggestions={allTags} />
           </ScrollView>
         )}
       </KeyboardAvoidingView>

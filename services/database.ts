@@ -23,6 +23,7 @@ function rowToFlashcard(row: FlashcardRow): Flashcard {
     easeFactor: row.ease_factor,
     nextReview: row.next_review_date,
     lastReviewed: row.last_review_date ?? undefined,
+    mastered: row.mastered,
   };
 }
 
@@ -33,6 +34,7 @@ function rowsToDeck(playlist: PlaylistRow, cards: FlashcardRow[]): Deck {
     description: '',
     color: playlist.color,
     emoji: playlist.emoji,
+    tags: playlist.tags ?? [],
     cards: cards.map(rowToFlashcard),
     createdAt: playlist.created_at,
     lastStudied: playlist.last_studied_at ?? undefined,
@@ -348,7 +350,13 @@ export const db = {
     /** Cria a playlist e insere todos os cards de uma vez. */
     async create(
       userId: string,
-      meta: { title: string; emoji: string; color: string; sourceType: SourceType },
+      meta: {
+        title: string;
+        emoji: string;
+        color: string;
+        sourceType: SourceType;
+        tags?: string[];
+      },
       cards: { front: string; back: string }[],
     ): Promise<Deck> {
       const playlist = await db.playlists.create({
@@ -357,6 +365,7 @@ export const db = {
         emoji: meta.emoji,
         color: meta.color,
         source_type: meta.sourceType,
+        tags: meta.tags ?? [],
       });
 
       const cardRows = await db.flashcards.createMany(

@@ -6,11 +6,31 @@ interface GeneratedCard {
   back: string;
 }
 
+/** Bloco de conteúdo enviado à API (texto, imagem ou documento PDF). */
+type ContentBlock =
+  | { type: 'text'; text: string }
+  | {
+      type: 'image';
+      source: { type: 'base64'; media_type: string; data: string };
+    }
+  | {
+      type: 'document';
+      source: { type: 'base64'; media_type: 'application/pdf'; data: string };
+    };
+
+/** Arquivo já lido em base64, pronto para virar cards por IA. */
+export interface FileAttachment {
+  base64: string;
+  mimeType: string;
+}
+
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
-export async function generateFlashcards(
-  input: string,
-  count: number = 10,
+const CARD_INSTRUCTIONS = `Return ONLY a valid JSON array with no other text. Each item must have "front" (question or concept) and "back" (answer or explanation) fields. Keep each card concise and focused on a single idea. Write the cards in the same language as the source content.`;
+
+/** Chamada única à API: monta a requisição, valida e extrai o array de cards. */
+async function requestCards(
+  content: string | ContentBlock[],
 ): Promise<GeneratedCard[]> {
   // A chave da IA vem do ambiente (.env) ou de uma config local legada.
   const envKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
@@ -20,13 +40,6 @@ export async function generateFlashcards(
       'Chave da API não configurada. Defina EXPO_PUBLIC_ANTHROPIC_API_KEY no arquivo .env.',
     );
   }
-
-  const prompt = `Generate exactly ${count} educational flashcards about the following topic or content.
-
-Return ONLY a valid JSON array with no other text. Each item must have "front" (question or concept) and "back" (answer or explanation) fields. Keep each card concise and focused on a single idea.
-
-Content:
-${input}`;
 
   const response = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
@@ -38,16 +51,18 @@ ${input}`;
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content }],
     }),
   });
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({})) as { error?: { message?: string } };
+    const err = (await response.json().catch(() => ({}))) as {
+      error?: { message?: string };
+    };
     throw new Error(err.error?.message ?? `Erro na API: ${response.status}`);
   }
 
-  const data = await response.json() as { content?: Array<{ text?: string }> };
+  const data = (await response.json()) as { content?: Array<{ text?: string }> };
   const text = data.content?.[0]?.text ?? '';
 
   const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -63,6 +78,51 @@ ${input}`;
   return cards.filter(c => c.front && c.back);
 }
 
+/** Gera cards a partir de um tópico ou texto colado. */
+export async function generateFlashcards(
+  input: string,
+  count: number = 10,
+): Promise<GeneratedCard[]> {
+  const prompt = `Generate exactly ${count} educational flashcards about the following topic or content.
+
+${CARD_INSTRUCTIONS}
+
+Content:
+${input}`;
+  return requestCards(prompt);
+}
+
+/**
+ * Gera cards a partir de um arquivo (PDF ou imagem). O Claude lê o PDF/imagem
+ * nativamente — sem parser local. Limites da API: 32 MB por requisição e 600
+ * páginas por PDF.
+ */
+export async function generateFlashcardsFromFile(
+  file: FileAttachment,
+  count: number = 10,
+): Promise<GeneratedCard[]> {
+  const fileBlock: ContentBlock =
+    file.mimeType === 'application/pdf'
+      ? {
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: file.base64,
+          },
+        }
+      : {
+          type: 'image',
+          source: { type: 'base64', media_type: file.mimeType, data: file.base64 },
+        };
+
+  const prompt = `Generate exactly ${count} educational flashcards from the attached file.
+
+${CARD_INSTRUCTIONS}`;
+
+  return requestCards([fileBlock, { type: 'text', text: prompt }]);
+}
+
 export function makeFlashcard(front: string, back: string): Flashcard {
   const now = new Date().toISOString();
   return {
@@ -74,6 +134,7 @@ export function makeFlashcard(front: string, back: string): Flashcard {
     repetitions: 0,
     easeFactor: 2.5,
     nextReview: now,
+    mastered: false,
   };
 }
 

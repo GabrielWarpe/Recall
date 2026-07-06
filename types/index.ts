@@ -9,6 +9,8 @@ export interface Flashcard {
   easeFactor: number;
   nextReview: string;
   lastReviewed?: string;
+  /** Definido pelo banco ao revisar (3+ repetições corretas). */
+  mastered: boolean;
 }
 
 export interface Deck {
@@ -17,6 +19,7 @@ export interface Deck {
   description: string;
   color: string;
   emoji: string;
+  tags: string[];
   cards: Flashcard[];
   createdAt: string;
   lastStudied?: string;

@@ -43,17 +43,31 @@ function ThemeController() {
   return null;
 }
 
-/** Reagenda os lembretes locais sempre que as configs de notificação mudam. */
+/**
+ * Reagenda os lembretes locais quando as configs mudam ou o usuário loga.
+ * Precisa viver DENTRO do AuthProvider (usa o usuário para contar os cards
+ * devidos dos próximos dias — lembrete inteligente).
+ */
 function NotificationController() {
   const { settings, ready } = useSettings();
+  const { user } = useAuth();
   useEffect(() => {
     if (!ready) return;
     void syncReminders({
       studyReminder: settings.studyReminder,
       reminderTime: settings.reminderTime,
       streakAlert: settings.streakAlert,
+      userId: user?.id,
+      newPerSession: settings.newPerSession,
     });
-  }, [ready, settings.studyReminder, settings.reminderTime, settings.streakAlert]);
+  }, [
+    ready,
+    settings.studyReminder,
+    settings.reminderTime,
+    settings.streakAlert,
+    settings.newPerSession,
+    user?.id,
+  ]);
   return null;
 }
 
@@ -184,6 +198,20 @@ function RootNavigator() {
         }}
       />
       <Stack.Screen
+        name="quiz/[deckId]"
+        options={{
+          presentation: 'fullScreenModal',
+          animation: 'slide_from_bottom',
+        }}
+      />
+      <Stack.Screen
+        name="write/[deckId]"
+        options={{
+          presentation: 'fullScreenModal',
+          animation: 'slide_from_bottom',
+        }}
+      />
+      <Stack.Screen
         name="settings"
         options={{ animation: 'slide_from_right' }}
       />
@@ -219,9 +247,9 @@ export default function RootLayout() {
       <ThemedStatusBar />
       <SettingsProvider>
         <ThemeController />
-        <NotificationController />
         <ThemeVarsView>
           <AuthProvider>
+            <NotificationController />
             <OnboardingProvider>
               <RootNavigator />
             </OnboardingProvider>

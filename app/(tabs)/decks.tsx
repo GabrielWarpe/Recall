@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  Alert,
+  ScrollView,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,9 +25,20 @@ export default function DecksScreen() {
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [sort, setSort] = useState<'recent' | 'alpha' | 'count'>('recent');
+  const [activeTag, setActiveTag] = useState<string | null>(null);
 
-  const filtered = decks.filter(d =>
-    d.title.toLowerCase().includes(search.toLowerCase()),
+  // Todas as tags em uso, para a linha de filtro. Se a tag ativa deixou de
+  // existir (deck editado/excluído), o filtro volta para "Todas".
+  const allTags = [...new Set(decks.flatMap(d => d.tags))].sort((a, b) =>
+    a.localeCompare(b, 'pt'),
+  );
+  const effectiveTag =
+    activeTag !== null && allTags.includes(activeTag) ? activeTag : null;
+
+  const filtered = decks.filter(
+    d =>
+      d.title.toLowerCase().includes(search.toLowerCase()) &&
+      (effectiveTag === null || d.tags.includes(effectiveTag)),
   );
 
   const sorted = [...filtered].sort((a, b) => {
@@ -142,6 +160,58 @@ export default function DecksScreen() {
             })}
           </View>
         )}
+
+        {/* Filtro por tag */}
+        {allTags.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="mt-3"
+          >
+            <View className="flex-row gap-2">
+              <TouchableOpacity
+                onPress={() => setActiveTag(null)}
+                activeOpacity={0.8}
+                className={`px-3.5 py-1.5 rounded-full ${
+                  effectiveTag === null
+                    ? 'bg-primary-container'
+                    : 'bg-surface-container'
+                }`}
+              >
+                <Text
+                  className={`font-inter-medium text-xs ${
+                    effectiveTag === null
+                      ? 'text-on-primary-container'
+                      : 'text-outline'
+                  }`}
+                >
+                  Todas
+                </Text>
+              </TouchableOpacity>
+              {allTags.map(tag => {
+                const active = effectiveTag === tag;
+                return (
+                  <TouchableOpacity
+                    key={tag}
+                    onPress={() => setActiveTag(active ? null : tag)}
+                    activeOpacity={0.8}
+                    className={`px-3.5 py-1.5 rounded-full ${
+                      active ? 'bg-primary-container' : 'bg-surface-container'
+                    }`}
+                  >
+                    <Text
+                      className={`font-inter-medium text-xs ${
+                        active ? 'text-on-primary-container' : 'text-outline'
+                      }`}
+                    >
+                      #{tag}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ScrollView>
+        )}
       </View>
 
       <FlatList
@@ -175,6 +245,8 @@ export default function DecksScreen() {
             deck={item}
             onPress={() => router.push(`/deck/${item.id}`)}
             onStudy={() => router.push(`/study/${item.id}`)}
+            onQuiz={() => router.push(`/quiz/${item.id}`)}
+            onWrite={() => router.push(`/write/${item.id}`)}
           />
         )}
       />
