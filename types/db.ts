@@ -12,6 +12,10 @@ export interface Profile {
   current_streak: number;
   longest_streak: number;
   last_study_date: string | null;
+  /** Preferências do app (tema, cor, fonte, estudo…) — sincronizadas na conta. */
+  settings: Record<string, unknown>;
+  /** Se o usuário já viu o onboarding (por conta, não por aparelho). */
+  onboarding_done: boolean;
   created_at: string;
 }
 

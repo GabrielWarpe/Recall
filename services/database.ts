@@ -357,6 +357,28 @@ export const db = {
     },
   },
 
+  achievements: {
+    /** Ids das conquistas desbloqueadas pelo usuário (fonte: banco). */
+    async getUnlocked(userId: string): Promise<string[]> {
+      const { data, error } = await supabase
+        .from('user_achievements')
+        .select('achievement_id')
+        .eq('user_id', userId);
+      if (error) return [];
+      return (data ?? []).map(r => r.achievement_id as string);
+    },
+
+    /** Registra conquistas desbloqueadas (idempotente: repetidas são ignoradas). */
+    async unlock(userId: string, ids: string[]): Promise<void> {
+      if (ids.length === 0) return;
+      const { error } = await supabase.from('user_achievements').upsert(
+        ids.map(achievement_id => ({ user_id: userId, achievement_id })),
+        { onConflict: 'user_id,achievement_id', ignoreDuplicates: true },
+      );
+      if (error) throw error;
+    },
+  },
+
   profile: {
     async get(userId: string): Promise<Profile | null> {
       const { data, error } = await supabase

@@ -110,7 +110,7 @@ export default function ProfileScreen() {
     useCallback(() => {
       if (!user) return;
       void db.flashcards.countMastered(user.id).then(setMastered);
-      void getUnlocked().then(ids => setAchievementsCount(ids.length));
+      void getUnlocked(user.id).then(ids => setAchievementsCount(ids.length));
     }, [user]),
   );
 

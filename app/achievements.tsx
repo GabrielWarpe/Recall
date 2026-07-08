@@ -5,6 +5,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ACHIEVEMENTS, getUnlocked } from '@/services/achievements';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useAuth } from '@/contexts/AuthContext';
 
 /** Separa o emoji do começo do título ("🎉 Primeiro deck!" → 🎉 + texto). */
 function splitTitle(title: string): { emoji: string; label: string } {
@@ -19,12 +20,14 @@ function splitTitle(title: string): { emoji: string; label: string } {
 export default function AchievementsScreen() {
   const router = useRouter();
   const colors = useThemeColors();
+  const { user } = useAuth();
   const [unlocked, setUnlocked] = useState<Set<string>>(new Set());
 
   useFocusEffect(
     useCallback(() => {
-      void getUnlocked().then(ids => setUnlocked(new Set(ids)));
-    }, []),
+      if (!user) return;
+      void getUnlocked(user.id).then(ids => setUnlocked(new Set(ids)));
+    }, [user?.id]),
   );
 
   const unlockedCount = ACHIEVEMENTS.filter(a => unlocked.has(a.id)).length;

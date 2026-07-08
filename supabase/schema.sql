@@ -116,6 +116,26 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+-- ── Dados por conta: configurações, onboarding e conquistas ─────────────────
+-- Tudo que era salvo apenas no aparelho (AsyncStorage) passa a viver na conta
+-- do usuário: preferências (tema, cor, fonte, estudo…), a flag de onboarding
+-- e as conquistas desbloqueadas.
+
+alter table profiles add column if not exists settings jsonb not null default '{}'::jsonb;
+alter table profiles add column if not exists onboarding_done boolean not null default false;
+
+create table if not exists user_achievements (
+  user_id uuid references profiles(id) on delete cascade not null,
+  achievement_id text not null,
+  unlocked_at timestamp with time zone default now(),
+  primary key (user_id, achievement_id)
+);
+
+alter table user_achievements enable row level security;
+
+drop policy if exists "Users can manage own achievements" on user_achievements;
+create policy "Users can manage own achievements" on user_achievements for all using (auth.uid() = user_id);
+
 -- ── Storage: imagens dos flashcards ──
 -- Bucket público para leitura (URLs permanentes nos cards, inclusive em decks
 -- compartilhados); escrita/atualização apenas na pasta do próprio usuário.

@@ -1,8 +1,6 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireNotification } from './notifications';
+import { db } from './database';
 import { LEVEL_TIERS, type LevelTier } from '@/utils/xp';
-
-const STORAGE_KEY = 'recall_unlocked_achievements';
 
 export interface AchievementStats {
   totalCards: number;
@@ -128,20 +126,21 @@ export const ACHIEVEMENTS: Achievement[] = [
   tier('Lenda'),
 ];
 
-export async function getUnlocked(): Promise<string[]> {
-  const raw = await AsyncStorage.getItem(STORAGE_KEY);
-  return raw ? (JSON.parse(raw) as string[]) : [];
+/** Conquistas desbloqueadas do usuário — vivem no banco, por conta. */
+export async function getUnlocked(userId: string): Promise<string[]> {
+  return db.achievements.getUnlocked(userId);
 }
 
 /**
  * Verifica as conquistas com base nas estatísticas atuais. Para cada conquista
- * recém-desbloqueada, dispara uma notificação e persiste o estado.
+ * recém-desbloqueada, dispara uma notificação e persiste o estado na conta.
  * Retorna os ids recém-desbloqueados.
  */
 export async function checkAchievements(
+  userId: string,
   stats: AchievementStats,
 ): Promise<string[]> {
-  const unlocked = new Set(await getUnlocked());
+  const unlocked = new Set(await getUnlocked(userId));
   const newly: Achievement[] = [];
 
   for (const a of ACHIEVEMENTS) {
@@ -152,7 +151,7 @@ export async function checkAchievements(
   }
 
   if (newly.length > 0) {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([...unlocked]));
+    await db.achievements.unlock(userId, newly.map(a => a.id));
     for (const a of newly) {
       await fireNotification(a.title, a.body);
     }

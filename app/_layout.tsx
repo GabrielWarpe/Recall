@@ -245,17 +245,18 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemedStatusBar />
-      <SettingsProvider>
-        <ThemeController />
-        <ThemeVarsView>
-          <AuthProvider>
+      {/* Auth precisa envolver Settings/Onboarding: ambos leem dados da conta. */}
+      <AuthProvider>
+        <SettingsProvider>
+          <ThemeController />
+          <ThemeVarsView>
             <NotificationController />
             <OnboardingProvider>
               <RootNavigator />
             </OnboardingProvider>
-          </AuthProvider>
-        </ThemeVarsView>
-      </SettingsProvider>
+          </ThemeVarsView>
+        </SettingsProvider>
+      </AuthProvider>
     </GestureHandlerRootView>
   );
 }

@@ -85,7 +85,7 @@ export function useStudySession(deck: Deck | null) {
           const sessions = await db.sessions.getRecent(user.id, 365);
           const playlists = await db.playlists.getAll(user.id);
           const lifetimeCards = sessions.reduce((sum, s) => sum + s.total, 0);
-          await checkAchievements({
+          await checkAchievements(user.id, {
             totalCards: lifetimeCards,
             totalSessions: sessions.length,
             currentStreak: after?.current_streak ?? 0,
