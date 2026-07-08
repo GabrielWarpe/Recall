@@ -78,7 +78,7 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       {/* Pular */}
       <View className="flex-row justify-end px-5 pt-2 h-10">
         {!isLast && (
@@ -142,8 +142,8 @@ export default function OnboardingScreen() {
       </View>
 
       {/* CTA */}
-      <View className="px-8 pb-6">
-        <Button variant="primary" size="lg" onPress={next}>
+      <View className="px-6 pb-4 pt-2">
+        <Button variant="primary" size="lg" className="w-full" onPress={next}>
           {isLast ? 'Começar' : 'Próximo'}
         </Button>
       </View>

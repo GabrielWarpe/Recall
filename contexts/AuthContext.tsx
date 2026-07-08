@@ -15,6 +15,9 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  /** true só após um login/registro real (evento SIGNED_IN), não numa sessão
+   * restaurada ao abrir o app. Usado para disparar o onboarding na hora certa. */
+  freshLogin: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   /** Retorna true se a sessão já foi criada (confirmação de e-mail desativada). */
   signUp: (email: string, password: string, name: string) => Promise<boolean>;
@@ -31,6 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [freshLogin, setFreshLogin] = useState(false);
 
   async function fetchProfile(userId: string) {
     const data = await db.profile.get(userId);
@@ -46,10 +50,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (session) void fetchProfile(session.user.id);
       else setProfile(null);
+      // SIGNED_IN = login/registro de verdade → habilita o onboarding.
+      // INITIAL_SESSION/TOKEN_REFRESHED (reabertura) NÃO disparam.
+      if (event === 'SIGNED_IN') setFreshLogin(true);
+      else if (event === 'SIGNED_OUT') setFreshLogin(false);
     });
 
     return () => subscription.unsubscribe();
@@ -95,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user: session?.user ?? null,
         profile,
         loading,
+        freshLogin,
         signIn,
         signUp,
         signOut,

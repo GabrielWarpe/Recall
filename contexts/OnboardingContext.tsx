@@ -14,10 +14,12 @@ import { useAuth } from '@/contexts/AuthContext';
  * Controla a experiência de primeira execução. A flag é um dado DA CONTA
  * (`profiles.onboarding_done`): uma conta nova vê o onboarding mesmo num
  * aparelho já usado, e uma conta antiga não o revê ao trocar de aparelho.
- * A chave legada do AsyncStorage é migrada para o banco uma única vez.
+ * As chaves antigas do AsyncStorage (global e por usuário) são migradas para
+ * o banco uma única vez.
  */
 
 const LEGACY_STORAGE_KEY = 'recall_onboarding_done';
+const LEGACY_KEY_PREFIX = 'recall_onboarding_done_';
 
 interface OnboardingContextType {
   /** `null` enquanto carrega; depois `true`/`false`. */
@@ -52,18 +54,27 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Conta marcada como "não viu": se este aparelho tem a flag legada (o
-    // usuário já viu o onboarding antes da migração), sobe para a conta.
+    // Conta marcada como "não viu": se este aparelho tem alguma flag legada
+    // (global ou por usuário — o usuário já viu o onboarding antes da
+    // migração para o banco), sobe para a conta.
     void (async () => {
-      const legacy = await AsyncStorage.getItem(LEGACY_STORAGE_KEY);
+      const [legacyGlobal, legacyPerUser] = await Promise.all([
+        AsyncStorage.getItem(LEGACY_STORAGE_KEY),
+        AsyncStorage.getItem(LEGACY_KEY_PREFIX + user.id),
+      ]);
       if (cancelled) return;
-      if (legacy === '1') {
+      if (legacyGlobal === '1' || legacyPerUser === '1') {
         setDone(true);
         await db.profile
           .update(user.id, { onboarding_done: true })
-          // Migração única: remove a flag do aparelho para que contas NOVAS
+          // Migração única: remove as flags do aparelho para que contas NOVAS
           // criadas aqui vejam o onboarding normalmente.
-          .then(() => AsyncStorage.removeItem(LEGACY_STORAGE_KEY))
+          .then(() =>
+            AsyncStorage.multiRemove([
+              LEGACY_STORAGE_KEY,
+              LEGACY_KEY_PREFIX + user.id,
+            ]),
+          )
           .catch(() => undefined);
       } else {
         setDone(false);

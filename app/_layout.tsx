@@ -132,7 +132,7 @@ function ThemeVarsView({ children }: { children: ReactNode }) {
 }
 
 function RootNavigator() {
-  const { session, loading } = useAuth();
+  const { session, loading, freshLogin } = useAuth();
   const { done: onboardingDone } = useOnboarding();
   const segments = useSegments();
   const router = useRouter();
@@ -144,13 +144,18 @@ function RootNavigator() {
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login');
-    } else if (session && !onboardingDone && !inOnboarding) {
-      // Primeira execução autenticada: mostra o onboarding uma única vez.
+    } else if (session && !onboardingDone && freshLogin && !inOnboarding) {
+      // Onboarding só logo após um login/registro real (não em sessão
+      // restaurada ao reabrir o app), e uma única vez por conta.
       router.replace('/onboarding');
-    } else if (session && onboardingDone && (inAuthGroup || inOnboarding)) {
+    } else if (
+      session &&
+      (onboardingDone || !freshLogin) &&
+      (inAuthGroup || inOnboarding)
+    ) {
       router.replace('/(tabs)');
     }
-  }, [session, loading, onboardingDone, segments, router]);
+  }, [session, loading, onboardingDone, freshLogin, segments, router]);
 
   if (loading || onboardingDone === null) {
     return (
