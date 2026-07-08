@@ -19,6 +19,7 @@ import { errorMessage } from '@/utils/errors';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { cardShadow } from '@/components/ui/Card';
 import { CardImagePicker } from '@/components/CardImagePicker';
 import { CardImages } from '@/components/CardImages';
 import { useThemeColors } from '@/hooks/useThemeColors';
@@ -156,23 +157,31 @@ export default function AddCardsScreen() {
         >
           {/* Mode tabs */}
           <View className="bg-surface-container-high rounded-card p-1 flex-row">
-            {(['manual', 'ai'] as Mode[]).map(m => (
-              <TouchableOpacity
-                key={m}
-                onPress={() => setMode(m)}
-                className={`flex-1 py-2.5 rounded-xl items-center ${
-                  mode === m ? 'bg-primary-container' : ''
-                }`}
-              >
-                <Text
-                  className={`font-inter-semibold text-sm ${
-                    mode === m ? 'text-on-primary-container' : 'text-outline'
+            {(['manual', 'ai'] as Mode[]).map(m => {
+              const active = mode === m;
+              return (
+                <TouchableOpacity
+                  key={m}
+                  onPress={() => setMode(m)}
+                  className={`flex-1 py-2.5 rounded-button items-center flex-row justify-center gap-1.5 ${
+                    active ? 'bg-primary-container' : ''
                   }`}
                 >
-                  {m === 'manual' ? '✏️ Manual' : '✨ Gerar com IA'}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Ionicons
+                    name={m === 'manual' ? 'create-outline' : 'flash'}
+                    size={15}
+                    color={active ? colors.onPrimaryContainer : colors.outline}
+                  />
+                  <Text
+                    className={`font-inter-semibold text-sm ${
+                      active ? 'text-on-primary-container' : 'text-outline'
+                    }`}
+                  >
+                    {m === 'manual' ? 'Manual' : 'Gerar com IA'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {/* Manual */}
@@ -235,7 +244,7 @@ export default function AddCardsScreen() {
                 onPress={() => void handleGenerate()}
                 loading={generating}
               >
-                {generating ? 'Gerando...' : '✨ Gerar e adicionar'}
+                {generating ? 'Gerando...' : 'Gerar e adicionar'}
               </Button>
             </View>
           )}
@@ -256,7 +265,8 @@ export default function AddCardsScreen() {
               {cards.map((card, i) => (
                 <View
                   key={card.id}
-                  className="bg-surface-container rounded-card p-4 border border-outline-variant/20 flex-row items-start gap-2"
+                  className="bg-surface-container rounded-card p-4 flex-row items-start gap-2"
+                  style={cardShadow}
                 >
                   <Text className="text-outline font-inter-regular text-xs mt-0.5">
                     {i + 1}.

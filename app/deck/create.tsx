@@ -27,6 +27,7 @@ import { DECK_COLORS } from '@/constants/theme';
 import { EmojiPickerField } from '@/components/EmojiPickerField';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { cardShadow } from '@/components/ui/Card';
 import { TagInput } from '@/components/TagInput';
 import { CardImagePicker } from '@/components/CardImagePicker';
 import { CardImages } from '@/components/CardImages';
@@ -313,25 +314,31 @@ export default function CreateDeckScreen() {
 
           {/* Mode tabs */}
           <View className="bg-surface-container-high rounded-card p-1 flex-row">
-            {(['ai', 'manual'] as Mode[]).map(m => (
-              <TouchableOpacity
-                key={m}
-                onPress={() => setMode(m)}
-                className={`flex-1 py-2.5 rounded-xl items-center ${
-                  mode === m ? 'bg-primary-container' : ''
-                }`}
-              >
-                <Text
-                  className={`font-inter-semibold text-sm ${
-                    mode === m
-                      ? 'text-on-primary-container'
-                      : 'text-outline'
+            {(['ai', 'manual'] as Mode[]).map(m => {
+              const active = mode === m;
+              return (
+                <TouchableOpacity
+                  key={m}
+                  onPress={() => setMode(m)}
+                  className={`flex-1 py-2.5 rounded-button items-center flex-row justify-center gap-1.5 ${
+                    active ? 'bg-primary-container' : ''
                   }`}
                 >
-                  {m === 'ai' ? '✨ Gerar com IA' : '✏️ Manual'}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Ionicons
+                    name={m === 'ai' ? 'flash' : 'create-outline'}
+                    size={15}
+                    color={active ? colors.onPrimaryContainer : colors.outline}
+                  />
+                  <Text
+                    className={`font-inter-semibold text-sm ${
+                      active ? 'text-on-primary-container' : 'text-outline'
+                    }`}
+                  >
+                    {m === 'ai' ? 'Gerar com IA' : 'Manual'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {/* AI Mode */}
@@ -361,13 +368,13 @@ export default function CreateDeckScreen() {
                   size="md"
                   onPress={() => void handlePickFile()}
                 >
-                  📎 Arquivo
+                  Arquivo
                 </Button>
               </View>
 
               {pickedFile && (
                 <View className="gap-1">
-                  <View className="flex-row items-center gap-2 bg-surface-container rounded-card px-3 py-2.5 border border-outline-variant/20">
+                  <View className="flex-row items-center gap-2 bg-surface-container rounded-card px-3 py-2.5" style={cardShadow}>
                     <Ionicons
                       name={
                         pickedFile.mimeType === 'application/pdf'
@@ -412,7 +419,7 @@ export default function CreateDeckScreen() {
                 onPress={() => void handleGenerate()}
                 loading={generating}
               >
-                {generating ? 'Gerando cards...' : '✨ Gerar flashcards'}
+                {generating ? 'Gerando cards...' : 'Gerar flashcards'}
               </Button>
             </View>
           )}
@@ -469,7 +476,8 @@ export default function CreateDeckScreen() {
               {cards.map((card, i) => (
                 <View
                   key={card.id}
-                  className="bg-surface-container rounded-card p-4 border border-outline-variant/20 gap-2"
+                  className="bg-surface-container rounded-card p-4 gap-2"
+                  style={cardShadow}
                 >
                   <View className="flex-row items-start gap-2">
                     <Text className="text-outline font-inter-regular text-xs mt-0.5">

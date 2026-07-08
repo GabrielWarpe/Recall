@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { db } from '@/services/database';
 import { errorMessage } from '@/utils/errors';
 import { useDecks } from '@/hooks/useDecks';
-import { DECK_COLORS } from '@/constants/theme';
+import { DECK_COLORS, resolveDeckColor } from '@/constants/theme';
 import { EmojiPickerField } from '@/components/EmojiPickerField';
 import { Input } from '@/components/ui/Input';
 import { TagInput } from '@/components/TagInput';
@@ -139,7 +139,7 @@ export default function EditDeckScreen() {
                     key={c}
                     onPress={() => setSelectedColor(c)}
                     className={`w-9 h-9 rounded-full border-2 ${
-                      selectedColor === c
+                      resolveDeckColor(selectedColor) === c
                         ? 'border-on-surface scale-110'
                         : 'border-outline-variant/40'
                     }`}

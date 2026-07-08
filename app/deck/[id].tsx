@@ -97,9 +97,9 @@ export default function DeckDetailScreen() {
           {deck.tags.map(tag => (
             <View
               key={tag}
-              className="bg-surface-container-high rounded-full px-2.5 py-1"
+              className="bg-surface-container-high rounded-pill px-2.5 py-1"
             >
-              <Text className="text-outline font-inter-medium text-xs">
+              <Text className="text-on-surface-variant font-inter-medium text-xs">
                 #{tag}
               </Text>
             </View>
@@ -205,7 +205,8 @@ export default function DeckDetailScreen() {
               return (
                 <View
                   key={a.id}
-                  className="bg-surface-container rounded-card px-4 py-3 flex-row items-center border border-outline-variant/20"
+                  className="bg-surface-container rounded-card px-4 py-3 flex-row items-center"
+                  style={cardShadow}
                 >
                   <View className="w-8 h-8 rounded-full bg-surface-container-high items-center justify-center mr-3">
                     <Text className="text-outline font-jakarta-bold text-xs">
@@ -263,7 +264,7 @@ export default function DeckDetailScreen() {
         data={cardData}
         keyExtractor={c => c.id}
         contentContainerStyle={{
-          paddingHorizontal: 24,
+          paddingHorizontal: 20,
           paddingBottom: 32,
           gap: 8,
         }}
@@ -284,7 +285,8 @@ export default function DeckDetailScreen() {
             onPress={() =>
               router.push(`/deck/card?deckId=${deck.id}&cardId=${item.id}`)
             }
-            className="bg-surface-container rounded-card p-4 border border-outline-variant/20 flex-row items-start gap-2"
+            className="bg-surface-container rounded-card p-4 flex-row items-start gap-2"
+            style={cardShadow}
           >
             <Text className="text-outline font-inter-regular text-xs mt-0.5 w-5">
               {index + 1}.
@@ -331,7 +333,7 @@ function StatChip({
         : 'text-on-surface';
 
   return (
-    <View className="flex-1 bg-surface-container rounded-card p-3 items-center border border-outline-variant/20">
+    <View className="flex-1 bg-surface-container rounded-card p-3 items-center" style={cardShadow}>
       <Text className={`font-jakarta-bold text-lg ${valueColor}`}>{value}</Text>
       <Text className="text-outline font-inter-regular text-xs mt-0.5">
         {label}
