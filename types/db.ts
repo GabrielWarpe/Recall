@@ -44,6 +44,8 @@ export interface FlashcardRow {
   next_review_date: string;
   last_review_date: string | null;
   mastered: boolean;
+  /** URLs públicas das imagens do card (Supabase Storage). */
+  images: string[];
   created_at: string;
 }
 
@@ -56,4 +58,16 @@ export interface StudySessionRow {
   cards_reviewed: number;
   correct_count: number;
   hard_count: number;
+  again_count: number;
+}
+
+export interface CardReviewRow {
+  id: string;
+  user_id: string;
+  card_id: string;
+  playlist_id: string;
+  grade: 'again' | 'hard' | 'good' | 'easy';
+  interval_before: number;
+  interval_after: number;
+  reviewed_at: string;
 }

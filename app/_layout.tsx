@@ -155,7 +155,7 @@ function RootNavigator() {
   if (loading || onboardingDone === null) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator size="large" color="#d2bbff" />
+        <ActivityIndicator size="large" color="#56d2c6" />
       </View>
     );
   }
@@ -164,7 +164,7 @@ function RootNavigator() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: '#0b1326' },
+        contentStyle: { backgroundColor: '#0b0f14' },
         animation: 'slide_from_right',
       }}
     >

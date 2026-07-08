@@ -21,51 +21,59 @@
     --leading-3xl: 36px;
   }
 
-  /* ── Tema CLARO (padrão) ── */
+  /* ── Tema CLARO (papel frio, coerente com "Meia-noite") ── */
   :root {
-    --color-background: 247 245 252;
-    --color-surface: 247 245 252;
-    --color-surface-container: 238 233 247;
-    --color-surface-container-high: 231 224 243;
-    --color-surface-container-highest: 224 216 238;
-    --color-surface-container-low: 243 239 250;
-    --color-surface-bright: 253 251 255;
-    --color-primary: 109 40 217;
-    --color-primary-container: 124 58 237;
+    --color-background: 244 246 248;
+    --color-surface: 244 246 248;
+    --color-surface-container: 255 255 255;
+    --color-surface-container-high: 236 240 243;
+    --color-surface-container-highest: 226 231 236;
+    --color-surface-container-low: 249 250 252;
+    --color-surface-bright: 255 255 255;
+    --color-primary: 14 110 105;
+    --color-primary-container: 23 140 135;
     --color-on-primary: 255 255 255;
-    --color-on-primary-container: 237 224 255;
-    --color-secondary: 74 68 88;
-    --color-secondary-container: 226 223 240;
-    --color-tertiary: 154 70 0;
-    --color-tertiary-container: 255 182 144;
-    --color-on-surface: 28 27 34;
-    --color-on-surface-variant: 73 69 78;
-    --color-outline-variant: 202 196 212;
-    --color-outline: 121 116 126;
-    --color-error: 186 26 26;
+    --color-on-primary-container: 223 251 247;
+    --color-secondary: 74 82 90;
+    --color-secondary-container: 218 226 230;
+    --color-tertiary: 168 106 22;
+    --color-tertiary-container: 245 213 165;
+    --color-on-surface: 24 30 38;
+    --color-on-surface-variant: 74 84 94;
+    --color-outline-variant: 205 213 220;
+    --color-outline: 118 128 138;
+    --color-error: 192 57 47;
+    /* Semânticas de estado */
+    --color-success: 34 139 92;
+    --color-warning: 176 122 32;
+    --color-info: 40 116 190;
   }
 
-  /* ── Tema ESCURO ── */
+  /* ── Tema ESCURO (Meia-noite: índigo-tinta + petróleo-teal) ── */
   .dark:root {
-    --color-background: 11 19 38;
-    --color-surface: 11 19 38;
-    --color-surface-container: 23 31 51;
-    --color-surface-container-high: 34 42 61;
-    --color-surface-container-highest: 45 52 73;
-    --color-surface-container-low: 19 27 46;
-    --color-surface-bright: 49 57 77;
-    --color-primary: 210 187 255;
-    --color-primary-container: 124 58 237;
-    --color-on-primary: 63 0 142;
-    --color-on-primary-container: 237 224 255;
-    --color-secondary: 199 196 216;
-    --color-secondary-container: 73 71 88;
-    --color-tertiary: 255 182 144;
-    --color-tertiary-container: 170 73 0;
-    --color-on-surface: 218 226 253;
-    --color-on-surface-variant: 204 195 216;
-    --color-outline-variant: 74 68 85;
-    --color-outline: 149 141 161;
-    --color-error: 255 180 171;
+    --color-background: 11 15 20;
+    --color-surface: 11 15 20;
+    --color-surface-container: 18 24 33;
+    --color-surface-container-high: 26 34 46;
+    --color-surface-container-highest: 38 48 62;
+    --color-surface-container-low: 15 20 27;
+    --color-surface-bright: 46 57 71;
+    --color-primary: 86 210 198;
+    --color-primary-container: 23 140 135;
+    --color-on-primary: 4 48 44;
+    --color-on-primary-container: 223 251 247;
+    --color-secondary: 174 185 196;
+    --color-secondary-container: 38 48 62;
+    --color-tertiary: 230 169 77;
+    --color-tertiary-container: 122 82 22;
+    --color-on-surface: 234 241 245;
+    --color-on-surface-variant: 174 185 196;
+    --color-outline-variant: 49 59 71;
+    --color-outline: 126 138 150;
+    --color-error: 229 117 107;
+    /* Semânticas de estado */
+    --color-success: 79 185 128;
+    --color-warning: 224 166 62;
+    --color-info: 90 166 232;
   }
 }

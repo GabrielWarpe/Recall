@@ -1,6 +1,6 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
-import { File, Paths } from 'expo-file-system';
+import { File, Paths, readAsStringAsync } from 'expo-file-system';
 import { db } from './database';
 import { DECK_COLORS } from '@/constants/theme';
 import type { Deck } from '@/types';
@@ -16,7 +16,7 @@ interface DeckExport {
   emoji: string;
   color: string;
   tags?: string[];
-  cards: { front: string; back: string }[];
+  cards: { front: string; back: string; images?: string[] }[];
 }
 
 interface BackupFile {
@@ -33,7 +33,7 @@ export interface BackupResult {
 
 /** Erro com código estável para a UI decidir a mensagem exibida. */
 export class BackupError extends Error {
-  constructor(public code: 'EMPTY' | 'INVALID' | 'NO_CARDS') {
+  constructor(public code: 'EMPTY' | 'INVALID' | 'NO_CARDS' | 'READ') {
     super(code);
     this.name = 'BackupError';
   }
@@ -46,7 +46,11 @@ function toDeckExport(d: Deck): DeckExport {
     emoji: d.emoji,
     color: d.color,
     tags: d.tags,
-    cards: d.cards.map(c => ({ front: c.front, back: c.back })),
+    cards: d.cards.map(c => ({
+      front: c.front,
+      back: c.back,
+      ...(c.images.length > 0 ? { images: c.images } : {}),
+    })),
   };
 }
 
@@ -138,9 +142,22 @@ export async function importDecks(userId: string): Promise<BackupResult | null> 
   const asset = result.assets[0];
   if (!asset) return null;
 
+  // Leitura em duas tentativas: API nova (File) e, se falhar, a legada —
+  // alguns provedores de arquivo (WhatsApp/Drive) entregam URIs que uma das
+  // duas não consegue abrir.
+  let raw: string;
+  try {
+    raw = await new File(asset.uri).text();
+  } catch {
+    try {
+      raw = await readAsStringAsync(asset.uri);
+    } catch {
+      throw new BackupError('READ');
+    }
+  }
+
   let parsed: unknown;
   try {
-    const raw = await new File(asset.uri).text();
     parsed = JSON.parse(raw);
   } catch {
     throw new BackupError('INVALID');
@@ -163,7 +180,21 @@ export async function importDecks(userId: string): Promise<BackupResult | null> 
               typeof c.back === 'string' &&
               c.front.trim().length > 0,
           )
-          .map(c => ({ front: String(c.front), back: String(c.back) }))
+          .map(c => {
+            const images = Array.isArray(c.images)
+              ? c.images
+                  .filter(
+                    (u): u is string =>
+                      typeof u === 'string' && /^https?:\/\//.test(u),
+                  )
+                  .slice(0, 4)
+              : [];
+            return {
+              front: String(c.front),
+              back: String(c.back),
+              ...(images.length > 0 ? { images } : {}),
+            };
+          })
       : [];
 
     if (!title || cards.length === 0) continue;
@@ -177,18 +208,16 @@ export async function importDecks(userId: string): Promise<BackupResult | null> 
           .slice(0, 5)
       : [];
 
-    await db.decks.create(
-      userId,
-      {
-        title,
-        emoji: typeof d.emoji === 'string' && d.emoji ? d.emoji : '📚',
-        color:
-          typeof d.color === 'string' && d.color ? d.color : DECK_COLORS[0],
-        sourceType: 'file',
-        tags,
-      },
-      cards,
-    );
+    const meta = {
+      title,
+      emoji: typeof d.emoji === 'string' && d.emoji ? d.emoji : '📚',
+      color: typeof d.color === 'string' && d.color ? d.color : DECK_COLORS[0],
+      sourceType: 'file' as const,
+    };
+
+    // Tolerância a banco sem a coluna `tags` fica centralizada em
+    // db.decks.create — aqui é só chamar.
+    await db.decks.create(userId, { ...meta, tags }, cards);
     deckCount++;
     cardCount += cards.length;
   }

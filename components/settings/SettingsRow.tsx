@@ -20,7 +20,7 @@ interface SettingsRowProps {
 
 export function SettingsRow({
   icon,
-  iconColor = '#d2bbff',
+  iconColor = '#56d2c6',
   title,
   subtitle,
   value,

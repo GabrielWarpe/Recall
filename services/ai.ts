@@ -78,18 +78,47 @@ async function requestCards(
   return cards.filter(c => c.front && c.back);
 }
 
-/** Gera cards a partir de um tópico ou texto colado. */
+/**
+ * Gera cards a partir de um tópico/texto e, opcionalmente, imagens de contexto
+ * (foto de página de livro, print de aula, diagrama, exercício...). Texto e
+ * imagens vão juntos na mesma mensagem para o modelo.
+ */
 export async function generateFlashcards(
   input: string,
   count: number = 10,
+  images: FileAttachment[] = [],
 ): Promise<GeneratedCard[]> {
-  const prompt = `Generate exactly ${count} educational flashcards about the following topic or content.
+  const source = input.trim();
+
+  if (images.length === 0) {
+    const prompt = `Generate exactly ${count} educational flashcards about the following topic or content.
 
 ${CARD_INSTRUCTIONS}
 
 Content:
-${input}`;
-  return requestCards(prompt);
+${source}`;
+    return requestCards(prompt);
+  }
+
+  const imageBlocks: ContentBlock[] = images.map(img => ({
+    type: 'image',
+    source: { type: 'base64', media_type: img.mimeType, data: img.base64 },
+  }));
+
+  const prompt = `Generate exactly ${count} educational flashcards from the attached image(s)${
+    source ? ' and the notes below' : ''
+  }.
+
+${CARD_INSTRUCTIONS}${
+    source
+      ? `
+
+Notes:
+${source}`
+      : ''
+  }`;
+
+  return requestCards([...imageBlocks, { type: 'text', text: prompt }]);
 }
 
 /**
@@ -123,7 +152,11 @@ ${CARD_INSTRUCTIONS}`;
   return requestCards([fileBlock, { type: 'text', text: prompt }]);
 }
 
-export function makeFlashcard(front: string, back: string): Flashcard {
+export function makeFlashcard(
+  front: string,
+  back: string,
+  images: string[] = [],
+): Flashcard {
   const now = new Date().toISOString();
   return {
     id: `card_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -135,6 +168,7 @@ export function makeFlashcard(front: string, back: string): Flashcard {
     easeFactor: 2.5,
     nextReview: now,
     mastered: false,
+    images,
   };
 }
 
@@ -204,4 +238,55 @@ export function getSessionCards(
   const due = getDueCards(deck);
   const news = newLimit > 0 ? getNewCards(deck).slice(0, newLimit) : [];
   return [...due, ...news];
+}
+
+export type Maturity = 'new' | 'learning' | 'young' | 'mature';
+
+/** Estágio de maturidade de um card, ao estilo Anki (corte em 21 dias). */
+export function cardMaturity(c: Pick<Flashcard, 'repetitions' | 'interval'>): Maturity {
+  if (c.repetitions === 0) return 'new';
+  if (c.interval < 7) return 'learning';
+  if (c.interval < 21) return 'young';
+  return 'mature';
+}
+
+/**
+ * Previsão de revisões para os próximos `days` dias. O primeiro dia (hoje)
+ * inclui tudo que já está atrasado, não só o que vence exatamente hoje —
+ * senão um usuário que ficou dias sem estudar veria "0" hoje e uma pilha
+ * escondida em dias passados. Só considera cards já vistos: novos não têm
+ * uma data de vencimento que signifique nada.
+ */
+export function forecastReviews(
+  cards: Flashcard[],
+  days: number,
+): { day: Date; count: number }[] {
+  const seen = cards.filter(c => c.repetitions > 0);
+  const today = new Date();
+
+  return Array.from({ length: days }, (_, i) => {
+    const day = new Date(today);
+    day.setDate(day.getDate() + i);
+
+    if (i === 0) {
+      const endToday = new Date(today);
+      endToday.setHours(23, 59, 59, 999);
+      return {
+        day,
+        count: seen.filter(c => new Date(c.nextReview) <= endToday).length,
+      };
+    }
+
+    const dayStart = new Date(day);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(day);
+    dayEnd.setHours(23, 59, 59, 999);
+    return {
+      day,
+      count: seen.filter(c => {
+        const t = new Date(c.nextReview).getTime();
+        return t >= dayStart.getTime() && t <= dayEnd.getTime();
+      }).length,
+    };
+  });
 }

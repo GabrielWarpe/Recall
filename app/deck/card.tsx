@@ -12,9 +12,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '@/services/database';
+import { uploadCardImages, type CardImage } from '@/services/images';
+import { errorMessage } from '@/utils/errors';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { CardImagePicker } from '@/components/CardImagePicker';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 export default function CardEditorScreen() {
@@ -29,6 +32,8 @@ export default function CardEditorScreen() {
   const isEditing = cardId != null && cardId.length > 0;
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
+  // Imagens do card: as existentes entram só com a URL; novas trazem base64.
+  const [images, setImages] = useState<CardImage[]>([]);
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
 
@@ -38,6 +43,7 @@ export default function CardEditorScreen() {
       if (c) {
         setFront(c.front);
         setBack(c.back);
+        setImages((c.images ?? []).map(uri => ({ uri })));
       }
       setLoading(false);
     });
@@ -51,20 +57,26 @@ export default function CardEditorScreen() {
     if (!user || !deckId) return;
     setSaving(true);
     try {
+      // Sobe as imagens novas (as existentes passam direto como URL).
+      const urls = await uploadCardImages(user.id, images);
       if (isEditing && cardId) {
         await db.flashcards.update(cardId, {
           front: front.trim(),
           back: back.trim(),
+          images: urls,
         });
       } else {
         await db.decks.addCards(user.id, deckId, [
-          { front: front.trim(), back: back.trim() },
+          {
+            front: front.trim(),
+            back: back.trim(),
+            ...(urls.length > 0 ? { images: urls } : {}),
+          },
         ]);
       }
       router.back();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Erro ao salvar.';
-      Alert.alert('Erro', msg);
+      Alert.alert('Erro', errorMessage(e, 'Erro ao salvar.'));
     } finally {
       setSaving(false);
     }
@@ -134,6 +146,8 @@ export default function CardEditorScreen() {
               numberOfLines={4}
               style={{ height: 120, textAlignVertical: 'top', paddingTop: 12 }}
             />
+
+            <CardImagePicker images={images} onChange={setImages} />
 
             {isEditing && (
               <Button

@@ -14,8 +14,10 @@ import { useDecks } from '@/hooks/useDecks';
 import { useAuth } from '@/contexts/AuthContext';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { exportDecks, importDecks, BackupError } from '@/services/backup';
+import { errorMessage } from '@/utils/errors';
 import { DeckCard } from '@/components/DeckCard';
 import { Input } from '@/components/ui/Input';
+import { cardShadow } from '@/components/ui/Card';
 
 export default function DecksScreen() {
   const router = useRouter();
@@ -88,12 +90,19 @@ export default function DecksScreen() {
         `${result.deckCount} baralho(s) e ${result.cardCount} cartão(ões) importados.`,
       );
     } catch (e) {
-      const msg =
-        e instanceof BackupError
-          ? e.code === 'INVALID'
+      let msg: string;
+      if (e instanceof BackupError) {
+        msg =
+          e.code === 'INVALID'
             ? 'O arquivo selecionado não é um backup válido do Recall.'
-            : 'Nenhum baralho válido foi encontrado no arquivo.'
-          : 'Não foi possível importar os baralhos.';
+            : e.code === 'READ'
+              ? 'Não consegui ler o arquivo. Salve-o no app Arquivos e tente importar de lá.'
+              : 'Nenhum baralho válido foi encontrado no arquivo.';
+      } else {
+        // Erro inesperado (ex.: banco/rede): mostra o detalhe para diagnóstico.
+        const detail = errorMessage(e, String(e));
+        msg = `Não foi possível importar os baralhos.\n\nDetalhe: ${detail}`;
+      }
       Alert.alert('Erro na importação', msg);
     } finally {
       setBusy(false);
@@ -111,17 +120,20 @@ export default function DecksScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background">
       {/* Header */}
-      <View className="px-6 pt-4 pb-4">
+      <View className="px-5 pt-6 pb-4">
         <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-on-surface font-jakarta-extrabold text-2xl">
+          <Text
+            className="text-on-surface font-jakarta-extrabold text-3xl"
+            style={{ letterSpacing: -0.5 }}
+          >
             Decks
           </Text>
           <TouchableOpacity
             onPress={confirmBackup}
             disabled={busy}
             activeOpacity={0.8}
-            className="w-10 h-10 items-center justify-center rounded-xl bg-surface-container"
-            style={{ opacity: busy ? 0.5 : 1 }}
+            className="w-10 h-10 items-center justify-center rounded-button bg-surface-container"
+            style={{ opacity: busy ? 0.5 : 1, ...cardShadow }}
           >
             <Ionicons
               name="swap-vertical"
@@ -144,13 +156,17 @@ export default function DecksScreen() {
                   key={s.key}
                   onPress={() => setSort(s.key)}
                   activeOpacity={0.8}
-                  className={`px-3.5 py-1.5 rounded-full ${
-                    active ? 'bg-primary-container' : 'bg-surface-container'
+                  className={`px-3.5 py-1.5 rounded-pill ${
+                    active
+                      ? 'bg-primary-container'
+                      : 'bg-surface-container-high'
                   }`}
                 >
                   <Text
                     className={`font-inter-medium text-xs ${
-                      active ? 'text-on-primary-container' : 'text-outline'
+                      active
+                        ? 'text-on-primary-container'
+                        : 'text-on-surface-variant'
                     }`}
                   >
                     {s.label}
@@ -172,17 +188,17 @@ export default function DecksScreen() {
               <TouchableOpacity
                 onPress={() => setActiveTag(null)}
                 activeOpacity={0.8}
-                className={`px-3.5 py-1.5 rounded-full ${
+                className={`px-3.5 py-1.5 rounded-pill ${
                   effectiveTag === null
                     ? 'bg-primary-container'
-                    : 'bg-surface-container'
+                    : 'bg-surface-container-high'
                 }`}
               >
                 <Text
                   className={`font-inter-medium text-xs ${
                     effectiveTag === null
                       ? 'text-on-primary-container'
-                      : 'text-outline'
+                      : 'text-on-surface-variant'
                   }`}
                 >
                   Todas
@@ -195,13 +211,17 @@ export default function DecksScreen() {
                     key={tag}
                     onPress={() => setActiveTag(active ? null : tag)}
                     activeOpacity={0.8}
-                    className={`px-3.5 py-1.5 rounded-full ${
-                      active ? 'bg-primary-container' : 'bg-surface-container'
+                    className={`px-3.5 py-1.5 rounded-pill ${
+                      active
+                        ? 'bg-primary-container'
+                        : 'bg-surface-container-high'
                     }`}
                   >
                     <Text
                       className={`font-inter-medium text-xs ${
-                        active ? 'text-on-primary-container' : 'text-outline'
+                        active
+                          ? 'text-on-primary-container'
+                          : 'text-on-surface-variant'
                       }`}
                     >
                       #{tag}
@@ -218,22 +238,29 @@ export default function DecksScreen() {
         data={sorted}
         keyExtractor={d => d.id}
         contentContainerStyle={{
-          paddingHorizontal: 24,
+          paddingHorizontal: 20,
           paddingBottom: 120,
           gap: 12,
         }}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View className="items-center mt-12 px-4">
-            <Text className="text-4xl mb-3">
-              {search.length > 0 ? '🔍' : '📚'}
-            </Text>
+          <View className="items-center mt-16 px-6">
+            <View
+              className="w-16 h-16 rounded-card items-center justify-center mb-4"
+              style={{ backgroundColor: colors.primary + '22' }}
+            >
+              <Ionicons
+                name={search.length > 0 ? 'search' : 'albums'}
+                size={26}
+                color={colors.primary}
+              />
+            </View>
             <Text className="text-on-surface font-jakarta-bold text-lg text-center">
               {search.length > 0
                 ? 'Nenhum deck encontrado'
                 : 'Nenhum deck ainda'}
             </Text>
-            <Text className="text-outline font-inter-regular text-sm mt-2 text-center">
+            <Text className="text-on-surface-variant font-inter-regular text-sm mt-2 text-center">
               {search.length > 0
                 ? 'Tente outra busca'
                 : 'Toque em + para criar seu primeiro deck'}
@@ -253,12 +280,18 @@ export default function DecksScreen() {
 
       {/* FAB */}
       <TouchableOpacity
-        className="absolute bottom-8 right-6 w-14 h-14 bg-primary-container rounded-full items-center justify-center"
+        className="absolute bottom-8 right-5 w-14 h-14 bg-primary-container rounded-full items-center justify-center"
         onPress={() => router.push('/deck/create')}
-        style={{ elevation: 8 }}
+        style={{
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.4,
+          shadowRadius: 10,
+        }}
         activeOpacity={0.85}
       >
-        <Ionicons name="add" size={28} color="#ede0ff" />
+        <Ionicons name="add" size={28} color="#dffbf7" />
       </TouchableOpacity>
     </SafeAreaView>
   );

@@ -36,6 +36,9 @@ module.exports = {
         'outline-variant': 'rgb(var(--color-outline-variant) / <alpha-value>)',
         outline: 'rgb(var(--color-outline) / <alpha-value>)',
         error: 'rgb(var(--color-error) / <alpha-value>)',
+        success: 'rgb(var(--color-success) / <alpha-value>)',
+        warning: 'rgb(var(--color-warning) / <alpha-value>)',
+        info: 'rgb(var(--color-info) / <alpha-value>)',
       },
       // Tamanhos via variáveis CSS (escaláveis em runtime pela config "Tamanho da fonte").
       fontSize: {
@@ -56,8 +59,9 @@ module.exports = {
         'inter-semibold': ['Inter_600SemiBold'],
       },
       borderRadius: {
-        card: '16px',
+        card: '14px',
         button: '12px',
+        pill: '9999px',
       },
     },
   },

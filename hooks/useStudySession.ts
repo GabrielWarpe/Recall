@@ -7,6 +7,7 @@ import {
   syncReminders,
 } from '@/services/notifications';
 import { checkAchievements } from '@/services/achievements';
+import { levelFromXp } from '@/utils/xp';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 
@@ -48,7 +49,7 @@ export function useStudySession(deck: Deck | null) {
 
   // Encerra a sessão gravando o registro (só se algum card foi concluído).
   const finalize = useCallback(
-    (reviewed: number, correct: number, hard: number) => {
+    (reviewed: number, correct: number, hard: number, again: number) => {
       if (deck && user && reviewed > 0) {
         const startedAt = new Date(startTimeRef.current).toISOString();
         void (async () => {
@@ -60,6 +61,7 @@ export function useStudySession(deck: Deck | null) {
             cards_reviewed: reviewed,
             correct_count: correct,
             hard_count: hard,
+            again_count: again,
           });
           await db.decks.touchStudied(deck.id);
 
@@ -78,12 +80,17 @@ export function useStudySession(deck: Deck | null) {
 
           const sessions = await db.sessions.getRecent(user.id, 365);
           const playlists = await db.playlists.getAll(user.id);
+          const lifetimeCards = sessions.reduce((sum, s) => sum + s.total, 0);
           await checkAchievements({
-            totalCards: sessions.reduce((sum, s) => sum + s.total, 0),
+            totalCards: lifetimeCards,
             totalSessions: sessions.length,
             currentStreak: after?.current_streak ?? 0,
             deckCount: playlists.length,
-            lastAccuracy: Math.round((correct / reviewed) * 100),
+            lastAccuracy:
+              correct + hard + again > 0
+                ? Math.round(((correct + hard) / (correct + hard + again)) * 100)
+                : 0,
+            level: levelFromXp(lifetimeCards).level,
           });
 
           // Reagenda os lembretes com as contagens pós-sessão: cards recém
@@ -119,6 +126,14 @@ export function useStudySession(deck: Deck | null) {
 
       const updated = reviewCard(card, g);
       void db.decks.reviewCard(updated);
+      void db.reviews.log({
+        user_id: user.id,
+        card_id: card.id,
+        playlist_id: deck.id,
+        grade: g,
+        interval_before: card.interval,
+        interval_after: updated.interval,
+      });
 
       const passed = g !== 'again';
       const rest = queue.slice(1);
@@ -136,7 +151,7 @@ export function useStudySession(deck: Deck | null) {
       setQueue(nextQueue);
 
       if (nextQueue.length === 0) {
-        finalize(nextDone, nextCorrect, nextHard);
+        finalize(nextDone, nextCorrect, nextHard, nextAgain);
       }
     },
     [deck, user, queue, correctCount, hardCount, againCount, done, finalize],
@@ -146,8 +161,8 @@ export function useStudySession(deck: Deck | null) {
   const skip = useCallback(() => {
     const rest = queue.slice(1);
     setQueue(rest);
-    if (rest.length === 0) finalize(done, correctCount, hardCount);
-  }, [queue, done, correctCount, hardCount, finalize]);
+    if (rest.length === 0) finalize(done, correctCount, hardCount, againCount);
+  }, [queue, done, correctCount, hardCount, againCount, finalize]);
 
   const reset = useCallback(() => {
     setPhase('idle');

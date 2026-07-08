@@ -41,6 +41,7 @@ create table if not exists flashcards (
   next_review_date timestamp with time zone default now(),
   last_review_date timestamp with time zone,
   mastered boolean default false,
+  images text[] not null default '{}',
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
@@ -53,7 +54,23 @@ create table if not exists study_sessions (
   ended_at timestamp with time zone,
   cards_reviewed integer default 0,
   correct_count integer default 0,
-  hard_count integer default 0
+  hard_count integer default 0,
+  again_count integer not null default 0
+);
+
+-- Log de revisões individuais (uma linha por avaliação De novo/Difícil/Bom/
+-- Fácil). Aditiva: alimenta retenção ao longo do tempo e detecção de leeches
+-- (Fase 4) sem alterar em nada o agendamento SM-2, que continua vivendo nos
+-- campos de `flashcards`.
+create table if not exists card_reviews (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references profiles(id) on delete cascade not null,
+  card_id uuid references flashcards(id) on delete cascade not null,
+  playlist_id uuid references playlists(id) on delete cascade not null,
+  grade text not null check (grade in ('again', 'hard', 'good', 'easy')),
+  interval_before integer not null,
+  interval_after integer not null,
+  reviewed_at timestamp with time zone default now()
 );
 
 -- Índices úteis para as consultas do app
@@ -62,22 +79,27 @@ create index if not exists idx_flashcards_user on flashcards(user_id);
 create index if not exists idx_flashcards_playlist on flashcards(playlist_id);
 create index if not exists idx_flashcards_due on flashcards(user_id, next_review_date);
 create index if not exists idx_sessions_user on study_sessions(user_id, started_at desc);
+create index if not exists idx_reviews_user on card_reviews(user_id, reviewed_at desc);
+create index if not exists idx_reviews_card on card_reviews(card_id, reviewed_at desc);
 
 -- ── Row Level Security ──────────────────────────────────────────────────────
 alter table profiles enable row level security;
 alter table playlists enable row level security;
 alter table flashcards enable row level security;
 alter table study_sessions enable row level security;
+alter table card_reviews enable row level security;
 
 drop policy if exists "Users can manage own profile" on profiles;
 drop policy if exists "Users can manage own playlists" on playlists;
 drop policy if exists "Users can manage own flashcards" on flashcards;
 drop policy if exists "Users can manage own sessions" on study_sessions;
+drop policy if exists "Users can manage own reviews" on card_reviews;
 
 create policy "Users can manage own profile" on profiles for all using (auth.uid() = id);
 create policy "Users can manage own playlists" on playlists for all using (auth.uid() = user_id);
 create policy "Users can manage own flashcards" on flashcards for all using (auth.uid() = user_id);
 create policy "Users can manage own sessions" on study_sessions for all using (auth.uid() = user_id);
+create policy "Users can manage own reviews" on card_reviews for all using (auth.uid() = user_id);
 
 -- ── Trigger: cria o perfil automaticamente ao registrar ─────────────────────
 create or replace function public.handle_new_user()
@@ -93,3 +115,29 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- ── Storage: imagens dos flashcards ──
+-- Bucket público para leitura (URLs permanentes nos cards, inclusive em decks
+-- compartilhados); escrita/atualização apenas na pasta do próprio usuário.
+insert into storage.buckets (id, name, public)
+values ('card-images', 'card-images', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "Card images are publicly readable" on storage.objects;
+create policy "Card images are publicly readable" on storage.objects
+  for select using (bucket_id = 'card-images');
+
+drop policy if exists "Users upload own card images" on storage.objects;
+create policy "Users upload own card images" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'card-images' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Users update own card images" on storage.objects;
+create policy "Users update own card images" on storage.objects
+  for update to authenticated
+  using (bucket_id = 'card-images' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Users delete own card images" on storage.objects;
+create policy "Users delete own card images" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'card-images' and (storage.foldername(name))[1] = auth.uid()::text);

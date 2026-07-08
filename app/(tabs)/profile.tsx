@@ -21,10 +21,9 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useStreak } from '@/hooks/useStreak';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { GoalSlider } from '@/components/GoalSlider';
+import { Card, cardShadow } from '@/components/ui/Card';
 import { ACHIEVEMENTS, getUnlocked } from '@/services/achievements';
-
-const GOAL_MIN = 10;
-const GOAL_MAX = 150;
+import { GOAL_MIN, GOAL_MAX } from '@/constants/study';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -145,17 +144,21 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background">
       <ScrollView
-        contentContainerStyle={{ padding: 24, paddingBottom: 120 }}
+        contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Header — único acesso às configurações */}
         <View className="flex-row items-center justify-between mb-8">
-          <Text className="text-on-surface font-jakarta-extrabold text-2xl">
+          <Text
+            className="text-on-surface font-jakarta-extrabold text-3xl"
+            style={{ letterSpacing: -0.5 }}
+          >
             Perfil
           </Text>
           <TouchableOpacity
             onPress={() => router.push('/settings')}
-            className="w-10 h-10 items-center justify-center rounded-xl bg-surface-container"
+            className="w-10 h-10 items-center justify-center rounded-button bg-surface-container"
+            style={cardShadow}
             activeOpacity={0.8}
           >
             <Ionicons name="settings-outline" size={20} color={colors.onSurface} />
@@ -219,28 +222,28 @@ export default function ProfileScreen() {
 
         {/* Stat tiles */}
         <View className="flex-row gap-4 mt-8">
-          <View className="flex-1 bg-surface-container rounded-card p-5 items-center border border-outline-variant/20">
+          <Card className="flex-1 p-5 items-center">
             <Ionicons name="flame" size={28} color={colors.tertiary} />
             <Text className="text-on-surface font-jakarta-extrabold text-3xl mt-2">
               {streak}
             </Text>
-            <Text className="text-outline font-inter-regular text-xs mt-1">
+            <Text className="text-on-surface-variant font-inter-regular text-xs mt-1">
               Dias de sequência
             </Text>
-          </View>
-          <View className="flex-1 bg-surface-container rounded-card p-5 items-center border border-outline-variant/20">
+          </Card>
+          <Card className="flex-1 p-5 items-center">
             <Ionicons name="medal" size={28} color={colors.primary} />
             <Text className="text-on-surface font-jakarta-extrabold text-3xl mt-2">
               {mastered}
             </Text>
-            <Text className="text-outline font-inter-regular text-xs mt-1">
+            <Text className="text-on-surface-variant font-inter-regular text-xs mt-1">
               Cards dominados
             </Text>
-          </View>
+          </Card>
         </View>
 
         {/* Meta diária */}
-        <View className="bg-surface-container rounded-card p-5 border border-outline-variant/20 mt-4">
+        <Card className="p-5 mt-4">
           <View className="flex-row items-end justify-between">
             <Text className="text-on-surface font-jakarta-bold text-xl">
               Meta diária
@@ -272,11 +275,11 @@ export default function ProfileScreen() {
               {GOAL_MAX}
             </Text>
           </View>
-        </View>
+        </Card>
 
         {/* Notificações push */}
-        <View className="flex-row items-center gap-3 px-4 py-3.5 bg-surface-container rounded-card border border-outline-variant/20 mt-4">
-          <View className="w-10 h-10 rounded-xl items-center justify-center bg-surface-container-high">
+        <Card className="flex-row items-center gap-3 px-4 py-3.5 mt-4">
+          <View className="w-10 h-10 rounded-button items-center justify-center bg-surface-container-high">
             <Ionicons name="notifications-outline" size={20} color={colors.primary} />
           </View>
           <View className="flex-1">
@@ -297,15 +300,16 @@ export default function ProfileScreen() {
             thumbColor={colors.onPrimaryContainer}
             ios_backgroundColor={colors.surfaceContainerHighest}
           />
-        </View>
+        </Card>
 
         {/* Conquistas */}
         <TouchableOpacity
           onPress={() => router.push('/achievements')}
           activeOpacity={0.8}
-          className="flex-row items-center gap-3 px-4 py-3.5 bg-surface-container rounded-card border border-outline-variant/20 mt-4"
+          className="flex-row items-center gap-3 px-4 py-3.5 bg-surface-container rounded-card mt-4"
+          style={cardShadow}
         >
-          <View className="w-10 h-10 rounded-xl items-center justify-center bg-surface-container-high">
+          <View className="w-10 h-10 rounded-button items-center justify-center bg-surface-container-high">
             <Ionicons name="trophy-outline" size={20} color={colors.tertiary} />
           </View>
           <View className="flex-1">

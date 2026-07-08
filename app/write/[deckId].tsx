@@ -19,6 +19,8 @@ import { useStudySession } from '@/hooks/useStudySession';
 import { useSettings } from '@/contexts/SettingsContext';
 import { checkAnswer, type AnswerVerdict } from '@/utils/answer';
 import { Button } from '@/components/ui/Button';
+import { CardImages } from '@/components/CardImages';
+import { cardShadow } from '@/components/ui/Card';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 function shuffle<T>(arr: T[]): T[] {
@@ -82,7 +84,12 @@ export default function WriteScreen() {
   if (deck.cards.length === 0) {
     return (
       <SafeAreaView className="flex-1 bg-background items-center justify-center px-8">
-        <Text className="text-5xl mb-4">✍️</Text>
+        <View
+          className="w-20 h-20 rounded-card items-center justify-center mb-5"
+          style={{ backgroundColor: colors.primary + '22' }}
+        >
+          <Ionicons name="create-outline" size={34} color={colors.primary} />
+        </View>
         <Text className="text-on-surface font-jakarta-bold text-2xl text-center">
           Deck vazio
         </Text>
@@ -166,7 +173,14 @@ export default function WriteScreen() {
     const reviewed = session.correctCount + session.hardCount;
     const accuracy =
       reviewed > 0 ? Math.round((session.correctCount / reviewed) * 100) : 0;
-    const emoji = accuracy >= 80 ? '🏆' : accuracy >= 50 ? '💪' : '📖';
+    const resultIcon =
+      accuracy >= 80 ? 'trophy' : accuracy >= 50 ? 'trending-up' : 'book';
+    const resultTint =
+      accuracy >= 80
+        ? colors.tertiary
+        : accuracy >= 50
+          ? colors.primary
+          : colors.info;
     const message =
       accuracy >= 100
         ? 'Perfeito! Você escreveu tudo certo. 🌟'
@@ -179,7 +193,12 @@ export default function WriteScreen() {
     return (
       <SafeAreaView className="flex-1 bg-background px-8">
         <View className="flex-1 items-center justify-center">
-          <Text className="text-6xl mb-4">{emoji}</Text>
+          <View
+            className="w-20 h-20 rounded-card items-center justify-center mb-5"
+            style={{ backgroundColor: resultTint + '22' }}
+          >
+            <Ionicons name={resultIcon} size={38} color={resultTint} />
+          </View>
           <Text className="text-on-surface font-jakarta-extrabold text-3xl text-center">
             Prática concluída!
           </Text>
@@ -191,7 +210,7 @@ export default function WriteScreen() {
           </Text>
 
           <View className="w-full mt-8 flex-row gap-3">
-            <View className="flex-1 bg-surface-container rounded-card p-4 items-center border border-outline-variant/20">
+            <View className="flex-1 bg-surface-container rounded-card p-4 items-center" style={cardShadow}>
               <Text className="text-on-surface font-jakarta-extrabold text-3xl">
                 {session.correctCount}
               </Text>
@@ -199,7 +218,7 @@ export default function WriteScreen() {
                 De primeira
               </Text>
             </View>
-            <View className="flex-1 bg-surface-container rounded-card p-4 items-center border border-outline-variant/20">
+            <View className="flex-1 bg-surface-container rounded-card p-4 items-center" style={cardShadow}>
               <Text className="text-on-surface font-jakarta-extrabold text-3xl">
                 {session.hardCount}
               </Text>
@@ -207,7 +226,7 @@ export default function WriteScreen() {
                 Recuperados
               </Text>
             </View>
-            <View className="flex-1 bg-surface-container rounded-card p-4 items-center border border-outline-variant/20">
+            <View className="flex-1 bg-surface-container rounded-card p-4 items-center" style={cardShadow}>
               <Text className="text-on-surface font-jakarta-extrabold text-3xl">
                 {accuracy}%
               </Text>
@@ -262,7 +281,7 @@ export default function WriteScreen() {
               className="text-on-surface font-jakarta-semibold text-base text-center"
               numberOfLines={1}
             >
-              ✍️ {deck.title}
+              {deck.title}
             </Text>
           </View>
           <View className="w-10 items-end">
@@ -273,10 +292,10 @@ export default function WriteScreen() {
         </View>
 
         {/* Progress bar */}
-        <View className="mx-6 mb-2">
-          <View className="h-1 bg-surface-container-high rounded-full overflow-hidden">
+        <View className="mx-5 mb-2">
+          <View className="h-1 bg-surface-container-high rounded-pill overflow-hidden">
             <View
-              className="h-full rounded-full bg-primary-container"
+              className="h-full rounded-pill bg-primary"
               style={{ width: `${progress * 100}%` }}
             />
           </View>
@@ -290,13 +309,18 @@ export default function WriteScreen() {
             showsVerticalScrollIndicator={false}
           >
             {/* Pergunta */}
-            <View className="bg-surface-container rounded-card p-6 border border-outline-variant/20">
+            <View className="bg-surface-container rounded-card p-6" style={cardShadow}>
               <Text className="text-outline font-inter-semibold text-xs tracking-widest mb-2">
                 ESCREVA A RESPOSTA
               </Text>
               <Text className="text-on-surface font-jakarta-bold text-xl leading-7">
                 {currentCard.front}
               </Text>
+              {currentCard.images.length > 0 && (
+                <View className="mt-3 items-start">
+                  <CardImages images={currentCard.images} size={72} />
+                </View>
+              )}
             </View>
 
             {currentResult == null ? (
@@ -313,7 +337,7 @@ export default function WriteScreen() {
                   autoCorrect={false}
                   autoCapitalize="none"
                   returnKeyType="done"
-                  className="bg-surface-container rounded-card px-4 py-4 text-on-surface font-inter-regular text-base border border-outline-variant/30"
+                  className="bg-surface-container rounded-card px-4 py-4 text-on-surface font-inter-regular text-base border border-outline-variant"
                   selectionColor={colors.primary}
                 />
                 <Button
@@ -340,13 +364,13 @@ export default function WriteScreen() {
                 <View
                   className={`rounded-card p-4 border ${
                     isCorrect
-                      ? 'bg-green-500/15 border-green-500'
+                      ? 'bg-success/15 border-success'
                       : 'bg-error/15 border-error'
                   }`}
                 >
                   <Text
                     className={`font-inter-semibold text-sm ${
-                      isCorrect ? 'text-green-400' : 'text-error'
+                      isCorrect ? 'text-success' : 'text-error'
                     }`}
                   >
                     {currentResult.overridden

@@ -19,69 +19,102 @@ export type ThemePalette = {
   outlineVariant: string;
   outline: string;
   error: string;
+  success: string;
+  warning: string;
+  info: string;
 };
 
+// Meia-noite (escuro): índigo-tinta + petróleo-teal. Espelha global.css —
+// esta cópia em objeto JS alimenta o useThemeColors (props de cor diretas:
+// ícones, tab bar, SVG), então precisa bater com as variáveis CSS.
 export const DARK_COLORS: ThemePalette = {
-  background: '#0b1326',
-  surface: '#0b1326',
-  surfaceContainer: '#171f33',
-  surfaceContainerHigh: '#222a3d',
-  surfaceContainerHighest: '#2d3449',
-  surfaceContainerLow: '#131b2e',
-  surfaceBright: '#31394d',
-  primary: '#d2bbff',
-  primaryContainer: '#7c3aed',
-  onPrimary: '#3f008e',
-  onPrimaryContainer: '#ede0ff',
-  secondary: '#c7c4d8',
-  secondaryContainer: '#494758',
-  tertiary: '#ffb690',
-  tertiaryContainer: '#aa4900',
-  onSurface: '#dae2fd',
-  onSurfaceVariant: '#ccc3d8',
-  outlineVariant: '#4a4455',
-  outline: '#958da1',
-  error: '#ffb4ab',
+  background: '#0b0f14',
+  surface: '#0b0f14',
+  surfaceContainer: '#121821',
+  surfaceContainerHigh: '#1a222e',
+  surfaceContainerHighest: '#26303e',
+  surfaceContainerLow: '#0f141b',
+  surfaceBright: '#2e3947',
+  primary: '#56d2c6',
+  primaryContainer: '#178c87',
+  onPrimary: '#04302c',
+  onPrimaryContainer: '#dffbf7',
+  secondary: '#aeb9c4',
+  secondaryContainer: '#26303e',
+  tertiary: '#e6a94d',
+  tertiaryContainer: '#7a5216',
+  onSurface: '#eaf1f5',
+  onSurfaceVariant: '#aeb9c4',
+  outlineVariant: '#313b47',
+  outline: '#7e8a96',
+  error: '#e5756b',
+  success: '#4fb980',
+  warning: '#e0a63e',
+  info: '#5aa6e8',
 };
 
+// Meia-noite (claro): papel frio.
 export const LIGHT_COLORS: ThemePalette = {
-  background: '#f7f5fc',
-  surface: '#f7f5fc',
-  surfaceContainer: '#eee9f7',
-  surfaceContainerHigh: '#e7e0f3',
-  surfaceContainerHighest: '#e0d8ee',
-  surfaceContainerLow: '#f3effa',
-  surfaceBright: '#fdfbff',
-  primary: '#6d28d9',
-  primaryContainer: '#7c3aed',
+  background: '#f4f6f8',
+  surface: '#f4f6f8',
+  surfaceContainer: '#ffffff',
+  surfaceContainerHigh: '#ecf0f3',
+  surfaceContainerHighest: '#e2e7ec',
+  surfaceContainerLow: '#f9fafc',
+  surfaceBright: '#ffffff',
+  primary: '#0e6e69',
+  primaryContainer: '#178c87',
   onPrimary: '#ffffff',
-  onPrimaryContainer: '#ede0ff',
-  secondary: '#4a4458',
-  secondaryContainer: '#e2dff0',
-  tertiary: '#9a4600',
-  tertiaryContainer: '#ffb690',
-  onSurface: '#1c1b22',
-  onSurfaceVariant: '#49454e',
-  outlineVariant: '#cac4d4',
-  outline: '#79747e',
-  error: '#ba1a1a',
+  onPrimaryContainer: '#dffbf7',
+  secondary: '#4a525a',
+  secondaryContainer: '#dae2e6',
+  tertiary: '#a86a16',
+  tertiaryContainer: '#f5d5a5',
+  onSurface: '#181e26',
+  onSurfaceVariant: '#4a545e',
+  outlineVariant: '#cdd5dc',
+  outline: '#76808a',
+  error: '#c0392f',
+  success: '#228b5c',
+  warning: '#b07a20',
+  info: '#2874be',
 };
 
 /** Palette padrão (escura) — mantida para compatibilidade com imports existentes. */
 export const COLORS = DARK_COLORS;
 
+// Cores de deck refinadas para harmonizar com a Meia-noite: tons de joia
+// levemente dessaturados que ficam bem como tinta de avatar sobre o índigo.
 export const DECK_COLORS = [
-  '#7c3aed',
-  '#2563eb',
-  '#0891b2',
-  '#059669',
-  '#d97706',
-  '#dc2626',
-  '#db2777',
-  '#6d28d9',
+  '#2fb3a6', // teal
+  '#4aa3e0', // azul
+  '#7e8ce8', // índigo
+  '#a98be2', // violeta
+  '#5fb187', // verde
+  '#e2a64e', // âmbar
+  '#e37e8c', // rosa
+  '#e07658', // coral
+  '#8a94a6', // ardósia
+  '#e6e9ee', // névoa
 ];
 
-export const DECK_EMOJIS = [
-  '📚', '🧠', '⚡', '🎯', '🔬', '🌍',
-  '💻', '🎨', '📐', '🏛️', '🎵', '🌱',
-];
+// Cores antigas → novas, casadas por FAMÍLIA de cor. Assim decks já criados
+// harmonizam na hora (identidade preservada) sem alterar o dado salvo.
+const LEGACY_DECK_COLORS: Record<string, string> = {
+  '#7c3aed': '#a98be2', // violeta
+  '#6d28d9': '#7e8ce8', // índigo
+  '#2563eb': '#4aa3e0', // azul
+  '#0891b2': '#2fb3a6', // ciano → teal
+  '#059669': '#5fb187', // verde
+  '#d97706': '#e2a64e', // âmbar
+  '#dc2626': '#e07658', // vermelho → coral
+  '#db2777': '#e37e8c', // rosa
+  '#000000': '#8a94a6', // preto → ardósia (invisível como tinta no escuro)
+  '#ffffff': '#e6e9ee', // branco → névoa
+};
+
+/** Cor de exibição de um deck: remapeia hexes da paleta antiga para a nova
+ * (puramente visual). Cores fora do mapa passam direto. */
+export function resolveDeckColor(color: string): string {
+  return LEGACY_DECK_COLORS[color.toLowerCase()] ?? color;
+}

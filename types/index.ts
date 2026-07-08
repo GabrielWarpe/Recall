@@ -11,6 +11,8 @@ export interface Flashcard {
   lastReviewed?: string;
   /** Definido pelo banco ao revisar (3+ repetições corretas). */
   mastered: boolean;
+  /** URLs públicas das imagens anexadas ao card. */
+  images: string[];
 }
 
 export interface Deck {
@@ -30,8 +32,12 @@ export interface StudySession {
   deckId: string;
   deckTitle: string;
   date: string;
+  /** Avaliados como Bom/Fácil. */
   correct: number;
-  incorrect: number;
+  /** Avaliados como Difícil — passaram, mas com esforço (não é erro). */
+  hard: number;
+  /** Vezes que "De novo" foi escolhido nesta sessão (erros de verdade). */
+  again: number;
   total: number;
   durationSeconds: number;
 }

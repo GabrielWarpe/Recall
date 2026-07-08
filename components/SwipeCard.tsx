@@ -60,9 +60,9 @@ const GRADE_BUTTONS: {
   {
     grade: 'easy',
     label: 'Fácil',
-    bg: 'bg-green-500/20',
-    border: 'border-green-500/40',
-    text: 'text-green-400',
+    bg: 'bg-success/20',
+    border: 'border-success/40',
+    text: 'text-success',
   },
 ];
 
@@ -82,27 +82,38 @@ export function SwipeCard({ card, onGrade, onSkip }: SwipeCardProps) {
     return () => clearTimeout(t);
   }, [settings.autoReveal, isFlipped]);
 
-  const triggerGrade = (g: Grade) => {
-    if (settings.feedbackSounds) {
-      const type =
-        g === 'again' || g === 'hard'
-          ? Haptics.NotificationFeedbackType.Warning
-          : Haptics.NotificationFeedbackType.Success;
-      void Haptics.notificationAsync(type);
-    }
-    onGrade(g);
+  // Vibração de resultado (verde = sucesso, vermelho/amarelo = aviso).
+  const fireGradeHaptic = (g: Grade) => {
+    if (!settings.feedbackSounds) return;
+    const type =
+      g === 'again' || g === 'hard'
+        ? Haptics.NotificationFeedbackType.Warning
+        : Haptics.NotificationFeedbackType.Success;
+    void Haptics.notificationAsync(type);
+  };
+
+  // Vibração leve ao revelar a resposta.
+  const reveal = () => {
+    if (!isFlipped && settings.feedbackSounds) void Haptics.selectionAsync();
+    setIsFlipped(true);
+  };
+  const toggleFlip = () => {
+    if (!isFlipped && settings.feedbackSounds) void Haptics.selectionAsync();
+    setIsFlipped(v => !v);
   };
 
   // Anima o card para fora e dispara a avaliação: "De novo" sai à esquerda,
-  // os demais à direita.
+  // os demais à direita. A vibração dispara já no toque (não no fim da
+  // animação), então o feedback é imediato.
   const flyOut = (g: Grade) => {
+    fireGradeHaptic(g);
     const toRight = g !== 'again';
     translateX.value = withTiming(
       (toRight ? 1 : -1) * width * 1.6,
       { duration: exitDuration },
       finished => {
         'worklet';
-        if (finished) runOnJS(triggerGrade)(g);
+        if (finished) runOnJS(onGrade)(g);
       },
     );
   };
@@ -117,19 +128,21 @@ export function SwipeCard({ card, onGrade, onSkip }: SwipeCardProps) {
     })
     .onEnd(e => {
       if (e.translationX > SWIPE_THRESHOLD) {
+        runOnJS(fireGradeHaptic)('good');
         translateX.value = withTiming(
           width * 1.6,
           { duration: exitDuration },
           () => {
-            runOnJS(triggerGrade)('good');
+            runOnJS(onGrade)('good');
           },
         );
       } else if (e.translationX < -SWIPE_THRESHOLD) {
+        runOnJS(fireGradeHaptic)('again');
         translateX.value = withTiming(
           -width * 1.6,
           { duration: exitDuration },
           () => {
-            runOnJS(triggerGrade)('again');
+            runOnJS(onGrade)('again');
           },
         );
       } else {
@@ -182,11 +195,11 @@ export function SwipeCard({ card, onGrade, onSkip }: SwipeCardProps) {
               goodOverlayStyle,
               { position: 'absolute', top: 24, left: 20, zIndex: 10 },
             ]}
-            className="bg-green-500/25 border-2 border-green-400 rounded-xl px-4 py-2"
+            className="bg-primary/25 border-2 border-primary rounded-button px-4 py-2"
             pointerEvents="none"
           >
             <Text
-              className="text-green-400 font-jakarta-bold text-lg"
+              className="text-primary font-jakarta-bold text-lg"
               style={{ transform: [{ rotate: '-12deg' }] }}
             >
               BOM ✓
@@ -199,7 +212,7 @@ export function SwipeCard({ card, onGrade, onSkip }: SwipeCardProps) {
               againOverlayStyle,
               { position: 'absolute', top: 24, right: 20, zIndex: 10 },
             ]}
-            className="bg-error/25 border-2 border-error rounded-xl px-4 py-2"
+            className="bg-error/25 border-2 border-error rounded-button px-4 py-2"
             pointerEvents="none"
           >
             <Text
@@ -210,11 +223,7 @@ export function SwipeCard({ card, onGrade, onSkip }: SwipeCardProps) {
             </Text>
           </Animated.View>
 
-          <FlashCard
-            card={card}
-            flipped={isFlipped}
-            onPress={() => setIsFlipped(v => !v)}
-          />
+          <FlashCard card={card} flipped={isFlipped} onPress={toggleFlip} />
         </Animated.View>
       </GestureDetector>
 
@@ -223,11 +232,11 @@ export function SwipeCard({ card, onGrade, onSkip }: SwipeCardProps) {
         {!isFlipped ? (
           <View className="gap-3">
             <TouchableOpacity
-              onPress={() => setIsFlipped(true)}
+              onPress={reveal}
               activeOpacity={0.85}
               className="bg-primary-container rounded-button py-4 flex-row items-center justify-center gap-2"
             >
-              <Ionicons name="sync-outline" size={18} color="#ede0ff" />
+              <Ionicons name="sync-outline" size={18} color="#dffbf7" />
               <Text className="text-on-primary-container font-inter-semibold text-base">
                 Ver resposta
               </Text>
@@ -266,9 +275,11 @@ export function SwipeCard({ card, onGrade, onSkip }: SwipeCardProps) {
               ))}
             </View>
 
-            <Text className="text-outline font-inter-regular text-xs text-center">
-              Arraste ← para "De novo" ou → para "Bom"
-            </Text>
+            {settings.swipeGestures && (
+              <Text className="text-outline font-inter-regular text-xs text-center">
+                Arraste ← para "De novo" ou → para "Bom"
+              </Text>
+            )}
 
             <TouchableOpacity
               onPress={onSkip}

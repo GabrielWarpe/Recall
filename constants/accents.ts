@@ -1,4 +1,10 @@
-export type AccentName = 'Violeta' | 'Azul' | 'Verde' | 'Laranja' | 'Rosa';
+export type AccentName =
+  | 'Teal'
+  | 'Violeta'
+  | 'Azul'
+  | 'Verde'
+  | 'Laranja'
+  | 'Rosa';
 
 /** As 4 cores da família "primary" que definem o destaque do app. */
 export interface AccentColors {
@@ -12,6 +18,21 @@ export const ACCENTS: Record<
   AccentName,
   { light: AccentColors; dark: AccentColors }
 > = {
+  // Cor de marca "Meia-noite" — petróleo-teal (padrão).
+  Teal: {
+    dark: {
+      primary: '#56d2c6',
+      primaryContainer: '#178c87',
+      onPrimary: '#04302c',
+      onPrimaryContainer: '#dffbf7',
+    },
+    light: {
+      primary: '#0e6e69',
+      primaryContainer: '#178c87',
+      onPrimary: '#ffffff',
+      onPrimaryContainer: '#dffbf7',
+    },
+  },
   Violeta: {
     dark: {
       primary: '#d2bbff',
@@ -94,5 +115,5 @@ export function hexToTriplet(hex: string): string {
 }
 
 export function resolveAccent(name: string): { light: AccentColors; dark: AccentColors } {
-  return ACCENTS[name as AccentName] ?? ACCENTS.Violeta;
+  return ACCENTS[name as AccentName] ?? ACCENTS.Teal;
 }

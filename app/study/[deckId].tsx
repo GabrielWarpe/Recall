@@ -10,6 +10,7 @@ import { useStudySession } from '@/hooks/useStudySession';
 import { useSettings } from '@/contexts/SettingsContext';
 import { SwipeCard } from '@/components/SwipeCard';
 import { Button } from '@/components/ui/Button';
+import { cardShadow } from '@/components/ui/Card';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 export default function StudySessionScreen() {
@@ -64,7 +65,12 @@ export default function StudySessionScreen() {
   if (deck.cards.length === 0) {
     return (
       <SafeAreaView className="flex-1 bg-background items-center justify-center px-8">
-        <Text className="text-5xl mb-4">📭</Text>
+        <View
+          className="w-20 h-20 rounded-card items-center justify-center mb-5"
+          style={{ backgroundColor: colors.primary + '22' }}
+        >
+          <Ionicons name="file-tray-outline" size={34} color={colors.primary} />
+        </View>
         <Text className="text-on-surface font-jakarta-bold text-2xl text-center">
           Deck vazio
         </Text>
@@ -87,7 +93,12 @@ export default function StudySessionScreen() {
   if (noDue && session.phase !== 'finished') {
     return (
       <SafeAreaView className="flex-1 bg-background items-center justify-center px-8">
-        <Text className="text-6xl mb-4">🎉</Text>
+        <View
+          className="w-20 h-20 rounded-card items-center justify-center mb-5"
+          style={{ backgroundColor: colors.success + '22' }}
+        >
+          <Ionicons name="checkmark-done" size={36} color={colors.success} />
+        </View>
         <Text className="text-on-surface font-jakarta-extrabold text-2xl text-center">
           Tudo em dia!
         </Text>
@@ -113,7 +124,14 @@ export default function StudySessionScreen() {
     const accuracy =
       reviewed > 0 ? Math.round((session.correctCount / reviewed) * 100) : 0;
 
-    const emoji = accuracy >= 80 ? '🏆' : accuracy >= 50 ? '💪' : '📖';
+    const resultIcon =
+      accuracy >= 80 ? 'trophy' : accuracy >= 50 ? 'trending-up' : 'book';
+    const resultTint =
+      accuracy >= 80
+        ? colors.tertiary
+        : accuracy >= 50
+          ? colors.primary
+          : colors.info;
 
     const message =
       accuracy >= 100
@@ -127,7 +145,12 @@ export default function StudySessionScreen() {
     return (
       <SafeAreaView className="flex-1 bg-background px-8">
         <View className="flex-1 items-center justify-center">
-          <Text className="text-6xl mb-4">{emoji}</Text>
+          <View
+            className="w-20 h-20 rounded-card items-center justify-center mb-5"
+            style={{ backgroundColor: resultTint + '22' }}
+          >
+            <Ionicons name={resultIcon} size={38} color={resultTint} />
+          </View>
           <Text className="text-on-surface font-jakarta-extrabold text-3xl text-center">
             Sessão concluída!
           </Text>
@@ -139,7 +162,7 @@ export default function StudySessionScreen() {
           </Text>
 
           <View className="w-full mt-8 flex-row gap-3">
-            <View className="flex-1 bg-surface-container rounded-card p-4 items-center border border-outline-variant/20">
+            <View className="flex-1 bg-surface-container rounded-card p-4 items-center" style={cardShadow}>
               <Text className="text-on-surface font-jakarta-extrabold text-3xl">
                 {session.correctCount}
               </Text>
@@ -147,7 +170,7 @@ export default function StudySessionScreen() {
                 Acertos
               </Text>
             </View>
-            <View className="flex-1 bg-surface-container rounded-card p-4 items-center border border-outline-variant/20">
+            <View className="flex-1 bg-surface-container rounded-card p-4 items-center" style={cardShadow}>
               <Text className="text-on-surface font-jakarta-extrabold text-3xl">
                 {session.hardCount}
               </Text>
@@ -155,7 +178,7 @@ export default function StudySessionScreen() {
                 Difícil
               </Text>
             </View>
-            <View className="flex-1 bg-surface-container rounded-card p-4 items-center border border-outline-variant/20">
+            <View className="flex-1 bg-surface-container rounded-card p-4 items-center" style={cardShadow}>
               <Text className="text-on-surface font-jakarta-extrabold text-3xl">
                 {session.againCount}
               </Text>
@@ -217,10 +240,10 @@ export default function StudySessionScreen() {
       </View>
 
       {/* Progress bar */}
-      <View className="mx-6 mb-2">
-        <View className="h-1 bg-surface-container-high rounded-full overflow-hidden">
+      <View className="mx-5 mb-2">
+        <View className="h-1 bg-surface-container-high rounded-pill overflow-hidden">
           <View
-            className="h-full rounded-full bg-primary-container"
+            className="h-full rounded-pill bg-primary"
             style={{ width: `${progress * 100}%` }}
           />
         </View>
@@ -237,14 +260,14 @@ export default function StudySessionScreen() {
           return (
             <View
               key={i}
-              className="h-1.5 rounded-full"
+              className="h-1.5 rounded-pill"
               style={{
                 width: isDone || isActive ? 20 : 12,
                 backgroundColor: isDone
-                  ? '#d2bbff'
+                  ? colors.primary
                   : isActive
-                    ? '#7c3aed'
-                    : '#222a3d',
+                    ? colors.primaryContainer
+                    : colors.surfaceContainerHighest,
               }}
             />
           );

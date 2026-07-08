@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import * as Haptics from 'expo-haptics';
 import { db } from '@/services/database';
 import { ensureNotificationPermission } from '@/services/notifications';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,8 +23,12 @@ import { useThemeColors } from '@/hooks/useThemeColors';
 import { SettingsRow } from '@/components/settings/SettingsRow';
 import { SettingsSection } from '@/components/settings/SettingsSection';
 import { TimePickerRow } from '@/components/settings/TimePickerRow';
+import { GOAL_MIN, GOAL_MAX, clampGoal } from '@/constants/study';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
+// Caixa de entrada para onde vai o "Enviar feedback". Troque quando houver um
+// e-mail de suporte dedicado.
+const FEEDBACK_EMAIL = 'gabrielmaicawarpechowski@aluno.santoangelo.uri.br';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -40,7 +45,8 @@ export default function SettingsScreen() {
 
   const saveDailyGoal = async () => {
     if (!user) return;
-    const goal = Math.max(1, parseInt(dailyGoal, 10) || 20);
+    // Mesmo intervalo do slider do Perfil ([GOAL_MIN, GOAL_MAX]).
+    const goal = clampGoal(parseInt(dailyGoal, 10));
     setDailyGoal(String(goal));
     await db.profile.update(user.id, { daily_goal: goal });
     await refreshProfile();
@@ -84,6 +90,22 @@ export default function SettingsScreen() {
       message:
         'Estude com flashcards e IA no Recall! Memorize qualquer coisa de forma inteligente. 🧠',
     }).catch(() => undefined);
+  };
+
+  const handleFeedback = async () => {
+    const url = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(
+      `Feedback do Recall (v${APP_VERSION})`,
+    )}`;
+    const canOpen = await Linking.canOpenURL(url).catch(() => false);
+    if (canOpen) {
+      await Linking.openURL(url);
+    } else {
+      // Sem app de e-mail configurado: mostra o endereço para copiar à mão.
+      Alert.alert(
+        'Enviar feedback',
+        `Nenhum app de e-mail encontrado. Escreva para:\n\n${FEEDBACK_EMAIL}`,
+      );
+    }
   };
 
   const handleAbout = () => {
@@ -156,6 +178,7 @@ export default function SettingsScreen() {
             icon="flag"
             iconColor="#ffb690"
             title="Meta diária de cartões"
+            subtitle={`Entre ${GOAL_MIN} e ${GOAL_MAX} cartões por dia`}
             rightSlot={
               <TextInput
                 value={dailyGoal}
@@ -226,7 +249,7 @@ export default function SettingsScreen() {
             onPress={() =>
               pickOption(
                 'Cor de destaque',
-                ['Violeta', 'Azul', 'Verde', 'Laranja', 'Rosa'],
+                ['Teal', 'Violeta', 'Azul', 'Verde', 'Laranja', 'Rosa'],
                 v => update('accent', v),
               )
             }
@@ -284,9 +307,19 @@ export default function SettingsScreen() {
             icon="phone-portrait"
             iconColor={colors.primary}
             title="Feedback tátil (vibração)"
+            subtitle="Vibra ao virar e avaliar os cartões durante o estudo"
             toggle={{
               value: settings.feedbackSounds,
-              onValueChange: v => update('feedbackSounds', v),
+              onValueChange: v => {
+                // Vibra na hora de ligar — confirmação tátil imediata de que
+                // o recurso está funcionando, sem precisar entrar no estudo.
+                if (v) {
+                  void Haptics.notificationAsync(
+                    Haptics.NotificationFeedbackType.Success,
+                  );
+                }
+                update('feedbackSounds', v);
+              },
             }}
           />
         </SettingsSection>
@@ -326,11 +359,8 @@ export default function SettingsScreen() {
             icon="chatbox-ellipses"
             iconColor="#ffb690"
             title="Enviar feedback"
-            onPress={() =>
-              void Linking.openURL(
-                'mailto:suporte@recall.app?subject=Feedback',
-              ).catch(soon)
-            }
+            subtitle="Abre seu app de e-mail"
+            onPress={handleFeedback}
           />
           <SettingsRow
             icon="information-circle"

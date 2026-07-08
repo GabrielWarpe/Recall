@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -19,17 +19,24 @@ import {
   generateFlashcardsFromFile,
   makeFlashcard,
 } from '@/services/ai';
+import { uploadCardImages, type CardImage } from '@/services/images';
+import { errorMessage } from '@/utils/errors';
+import { useAuth } from '@/contexts/AuthContext';
 import { useDecks } from '@/hooks/useDecks';
-import { DECK_COLORS, DECK_EMOJIS } from '@/constants/theme';
+import { DECK_COLORS } from '@/constants/theme';
+import { EmojiPickerField } from '@/components/EmojiPickerField';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { TagInput } from '@/components/TagInput';
+import { CardImagePicker } from '@/components/CardImagePicker';
+import { CardImages } from '@/components/CardImages';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 type Mode = 'ai' | 'manual';
 
 export default function CreateDeckScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { createDeck, decks } = useDecks();
   const colors = useThemeColors();
   const [mode, setMode] = useState<Mode>('ai');
@@ -39,7 +46,7 @@ export default function CreateDeckScreen() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedColor, setSelectedColor] = useState(DECK_COLORS[0]!);
-  const [selectedEmoji, setSelectedEmoji] = useState(DECK_EMOJIS[0]!);
+  const [selectedEmoji, setSelectedEmoji] = useState('📚');
   const [tags, setTags] = useState<string[]>([]);
 
   // Tags já usadas nos outros decks, como sugestão de 1 toque.
@@ -57,17 +64,26 @@ export default function CreateDeckScreen() {
     base64: string;
     mimeType: string;
   } | null>(null);
+  // Imagens de CONTEXTO para a IA (página de livro, print, diagrama...).
+  const [aiImages, setAiImages] = useState<CardImage[]>([]);
 
   // Manual mode
   const [manualCards, setManualCards] = useState<Flashcard[]>([]);
   const [newFront, setNewFront] = useState('');
   const [newBack, setNewBack] = useState('');
+  // Imagens do card sendo composto; o preview usa URIs locais e as imagens
+  // (com base64) ficam guardadas por card até o upload, na hora de salvar.
+  const [newImages, setNewImages] = useState<CardImage[]>([]);
+  const pendingImagesRef = useRef<Record<string, CardImage[]>>({});
 
   const cards = mode === 'ai' ? generatedCards : manualCards;
 
   const handleGenerate = async () => {
-    if (!pickedFile && !aiTopic.trim()) {
-      Alert.alert('Atenção', 'Digite um tópico ou anexe um arquivo.');
+    if (!pickedFile && !aiTopic.trim() && aiImages.length === 0) {
+      Alert.alert(
+        'Atenção',
+        'Digite um tópico, anexe um arquivo ou adicione imagens.',
+      );
       return;
     }
     setGenerating(true);
@@ -78,11 +94,17 @@ export default function CreateDeckScreen() {
             { base64: pickedFile.base64, mimeType: pickedFile.mimeType },
             count,
           )
-        : await generateFlashcards(aiTopic, count);
+        : await generateFlashcards(
+            aiTopic,
+            count,
+            // Imagens comprimidas em JPEG viram contexto do prompt.
+            aiImages
+              .filter(img => img.base64)
+              .map(img => ({ base64: img.base64!, mimeType: 'image/jpeg' })),
+          );
       setGeneratedCards(raw.map(c => makeFlashcard(c.front, c.back)));
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Erro desconhecido';
-      Alert.alert('Erro ao gerar cards', msg);
+      Alert.alert('Erro ao gerar cards', errorMessage(e, 'Erro desconhecido'));
     } finally {
       setGenerating(false);
     }
@@ -134,15 +156,20 @@ export default function CreateDeckScreen() {
 
   const handleAddManualCard = () => {
     if (!newFront.trim() || !newBack.trim()) return;
-    setManualCards(c => [
-      ...c,
-      makeFlashcard(newFront.trim(), newBack.trim()),
-    ]);
+    const card = makeFlashcard(
+      newFront.trim(),
+      newBack.trim(),
+      newImages.map(img => img.uri), // URIs locais só para o preview
+    );
+    if (newImages.length > 0) pendingImagesRef.current[card.id] = newImages;
+    setManualCards(c => [...c, card]);
     setNewFront('');
     setNewBack('');
+    setNewImages([]);
   };
 
   const handleRemoveCard = (id: string) => {
+    delete pendingImagesRef.current[id];
     if (mode === 'ai') {
       setGeneratedCards(c => c.filter(x => x.id !== id));
     } else {
@@ -164,20 +191,34 @@ export default function CreateDeckScreen() {
       );
       return;
     }
+    if (!user) return;
     setSaving(true);
     try {
+      // Sobe as imagens dos cards manuais (com dedupe) e monta o payload
+      // final com as URLs públicas.
+      const payload: { front: string; back: string; images?: string[] }[] = [];
+      for (const c of cards) {
+        const pending = pendingImagesRef.current[c.id] ?? [];
+        const urls =
+          pending.length > 0 ? await uploadCardImages(user.id, pending) : [];
+        payload.push({
+          front: c.front,
+          back: c.back,
+          ...(urls.length > 0 ? { images: urls } : {}),
+        });
+      }
+
       await createDeck({
         title: title.trim(),
         emoji: selectedEmoji,
         color: selectedColor,
         sourceType: mode === 'ai' ? 'ai' : 'manual',
         tags,
-        cards: cards.map(c => ({ front: c.front, back: c.back })),
+        cards: payload,
       });
       router.back();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Erro ao salvar o deck.';
-      Alert.alert('Erro', msg);
+      Alert.alert('Erro', errorMessage(e, 'Erro ao salvar o deck.'));
     } finally {
       setSaving(false);
     }
@@ -239,23 +280,7 @@ export default function CreateDeckScreen() {
             <Text className="text-on-surface-variant font-inter-medium text-sm">
               Ícone
             </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View className="flex-row gap-2">
-                {DECK_EMOJIS.map(e => (
-                  <TouchableOpacity
-                    key={e}
-                    onPress={() => setSelectedEmoji(e)}
-                    className={`w-10 h-10 rounded-xl items-center justify-center ${
-                      selectedEmoji === e
-                        ? 'bg-primary/20 border border-primary'
-                        : 'bg-surface-container-high'
-                    }`}
-                  >
-                    <Text className="text-xl">{e}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+            <EmojiPickerField value={selectedEmoji} onChange={setSelectedEmoji} />
           </View>
 
           {/* Color picker */}
@@ -271,7 +296,7 @@ export default function CreateDeckScreen() {
                   className={`w-9 h-9 rounded-full border-2 ${
                     selectedColor === c
                       ? 'border-on-surface scale-110'
-                      : 'border-transparent'
+                      : 'border-outline-variant/40'
                   }`}
                   style={{ backgroundColor: c }}
                 />
@@ -372,6 +397,15 @@ export default function CreateDeckScreen() {
                 </View>
               )}
 
+              {/* Imagens de contexto para a IA (fotos de página, prints...) */}
+              {!pickedFile && (
+                <CardImagePicker
+                  images={aiImages}
+                  onChange={setAiImages}
+                  label="Imagens de contexto (opcional)"
+                />
+              )}
+
               <Button
                 variant="primary"
                 size="lg"
@@ -401,6 +435,7 @@ export default function CreateDeckScreen() {
                 numberOfLines={3}
                 style={{ height: 80, textAlignVertical: 'top', paddingTop: 12 }}
               />
+              <CardImagePicker images={newImages} onChange={setNewImages} />
               <Button
                 variant="secondary"
                 size="md"
@@ -447,6 +482,11 @@ export default function CreateDeckScreen() {
                       <Text className="text-outline font-inter-regular text-xs mt-1.5 leading-4">
                         {card.back}
                       </Text>
+                      {card.images.length > 0 && (
+                        <View className="mt-2 items-start">
+                          <CardImages images={card.images} size={44} />
+                        </View>
+                      )}
                     </View>
                     <TouchableOpacity
                       onPress={() => handleRemoveCard(card.id)}

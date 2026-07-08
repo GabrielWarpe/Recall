@@ -33,7 +33,7 @@ const DEFAULTS: AppSettings = {
   shuffle: true,
   autoReveal: false,
   theme: 'Escuro',
-  accent: 'Violeta',
+  accent: 'Teal',
   fontSize: 'Médio',
   studyReminder: false,
   reminderTime: '20:00',

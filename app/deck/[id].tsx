@@ -7,16 +7,13 @@ import { format } from 'date-fns';
 import type { Deck, Flashcard, StudySession } from '@/types';
 import { db } from '@/services/database';
 import { exportDeck, BackupError } from '@/services/backup';
-import { getSessionCards } from '@/services/ai';
-import { useSettings } from '@/contexts/SettingsContext';
+import { getDueCards } from '@/services/ai';
+import { sessionAccuracy } from '@/utils/stats';
 import { Button } from '@/components/ui/Button';
+import { cardShadow } from '@/components/ui/Card';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 type Tab = 'cards' | 'history';
-
-function accuracyOf(s: StudySession): number {
-  return s.total > 0 ? Math.round((s.correct / s.total) * 100) : 0;
-}
 
 function accuracyColor(pct: number): string {
   return pct >= 80 ? 'text-primary' : pct >= 50 ? 'text-tertiary' : 'text-error';
@@ -26,7 +23,6 @@ export default function DeckDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const colors = useThemeColors();
-  const { settings } = useSettings();
   const [deck, setDeck] = useState<Deck | null>(null);
   const [attempts, setAttempts] = useState<StudySession[]>([]);
   const [tab, setTab] = useState<Tab>('cards');
@@ -47,10 +43,11 @@ export default function DeckDetailScreen() {
 
   if (!deck) return null;
 
-  const accuracies = attempts.map(accuracyOf);
+  const accuracies = attempts.map(sessionAccuracy);
   const best = accuracies.length > 0 ? Math.max(...accuracies) : null;
   const last = accuracies.length > 0 ? accuracies[0]! : null;
-  const dueCount = getSessionCards(deck, settings.newPerSession).length;
+  // Só cards de fato vencidos — cards novos não são "revisão pendente".
+  const dueCount = getDueCards(deck).length;
 
   const handleMenu = () => {
     Alert.alert(deck.title, undefined, [
@@ -129,7 +126,7 @@ export default function DeckDetailScreen() {
       {/* Revisar hoje */}
       {dueCount > 0 && (
         <View className="flex-row items-center gap-1.5 mb-3">
-          <Text className="text-sm">🔄</Text>
+          <Ionicons name="refresh" size={15} color={colors.primary} />
           <Text className="text-on-surface-variant font-inter-medium text-sm">
             <Text className="text-primary font-inter-semibold">{dueCount}</Text>{' '}
             {dueCount === 1 ? 'card' : 'cards'} para revisar hoje
@@ -155,7 +152,7 @@ export default function DeckDetailScreen() {
           <TouchableOpacity
             key={t}
             onPress={() => setTab(t)}
-            className={`flex-1 py-2.5 rounded-xl items-center ${
+            className={`flex-1 py-2.5 rounded-button items-center ${
               tab === t ? 'bg-primary-container' : ''
             }`}
           >
@@ -189,9 +186,14 @@ export default function DeckDetailScreen() {
       {/* History list (only on history tab) */}
       {tab === 'history' &&
         (attempts.length === 0 ? (
-          <View className="bg-surface-container rounded-card p-5 items-center border border-outline-variant/20">
-            <Text className="text-2xl mb-1">📈</Text>
-            <Text className="text-outline font-inter-regular text-sm text-center">
+          <View className="bg-surface-container rounded-card p-6 items-center" style={cardShadow}>
+            <View
+              className="w-14 h-14 rounded-card items-center justify-center mb-3"
+              style={{ backgroundColor: colors.primary + '22' }}
+            >
+              <Ionicons name="trending-up" size={24} color={colors.primary} />
+            </View>
+            <Text className="text-on-surface-variant font-inter-regular text-sm text-center">
               Você ainda não estudou este deck.{'\n'}As tentativas aparecerão
               aqui.
             </Text>
@@ -199,7 +201,7 @@ export default function DeckDetailScreen() {
         ) : (
           <View className="gap-2">
             {attempts.map((a, i) => {
-              const pct = accuracyOf(a);
+              const pct = sessionAccuracy(a);
               return (
                 <View
                   key={a.id}
@@ -294,6 +296,15 @@ export default function DeckDetailScreen() {
               <Text className="text-outline font-inter-regular text-xs mt-1.5 leading-4">
                 {item.back}
               </Text>
+              {item.images.length > 0 && (
+                <View className="flex-row items-center gap-1 mt-1.5">
+                  <Ionicons name="image" size={12} color={colors.outline} />
+                  <Text className="text-outline font-inter-regular text-xs">
+                    {item.images.length}{' '}
+                    {item.images.length === 1 ? 'imagem' : 'imagens'}
+                  </Text>
+                </View>
+              )}
             </View>
             <Ionicons name="pencil" size={15} color={colors.outline} />
           </TouchableOpacity>

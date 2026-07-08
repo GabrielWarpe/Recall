@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,13 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Flashcard } from '@/types';
 import { db } from '@/services/database';
 import { generateFlashcards, makeFlashcard } from '@/services/ai';
+import { uploadCardImages, type CardImage } from '@/services/images';
+import { errorMessage } from '@/utils/errors';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { CardImagePicker } from '@/components/CardImagePicker';
+import { CardImages } from '@/components/CardImages';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 type Mode = 'manual' | 'ai';
@@ -34,42 +38,61 @@ export default function AddCardsScreen() {
   // Manual
   const [newFront, setNewFront] = useState('');
   const [newBack, setNewBack] = useState('');
+  // Imagens do card em composição (preview local; upload só no salvar).
+  const [newImages, setNewImages] = useState<CardImage[]>([]);
+  const pendingImagesRef = useRef<Record<string, CardImage[]>>({});
 
   // AI
   const [aiTopic, setAiTopic] = useState('');
   const [cardCount, setCardCount] = useState('10');
   const [generating, setGenerating] = useState(false);
+  // Imagens de CONTEXTO para a IA (página de livro, print, diagrama...).
+  const [aiImages, setAiImages] = useState<CardImage[]>([]);
 
   const handleAddManual = () => {
     if (!newFront.trim() || !newBack.trim()) return;
-    setCards(c => [...c, makeFlashcard(newFront.trim(), newBack.trim())]);
+    const card = makeFlashcard(
+      newFront.trim(),
+      newBack.trim(),
+      newImages.map(img => img.uri), // URIs locais só para o preview
+    );
+    if (newImages.length > 0) pendingImagesRef.current[card.id] = newImages;
+    setCards(c => [...c, card]);
     setNewFront('');
     setNewBack('');
+    setNewImages([]);
   };
 
   const handleGenerate = async () => {
-    if (!aiTopic.trim()) {
-      Alert.alert('Atenção', 'Digite um tópico para gerar os cards.');
+    if (!aiTopic.trim() && aiImages.length === 0) {
+      Alert.alert('Atenção', 'Digite um tópico ou adicione imagens.');
       return;
     }
     setGenerating(true);
     try {
       const count = Math.min(Math.max(parseInt(cardCount, 10) || 10, 1), 30);
-      const raw = await generateFlashcards(aiTopic, count);
+      const raw = await generateFlashcards(
+        aiTopic,
+        count,
+        aiImages
+          .filter(img => img.base64)
+          .map(img => ({ base64: img.base64!, mimeType: 'image/jpeg' })),
+      );
       setCards(prev => [
         ...prev,
         ...raw.map(c => makeFlashcard(c.front, c.back)),
       ]);
       setAiTopic('');
+      setAiImages([]);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Erro desconhecido';
-      Alert.alert('Erro ao gerar cards', msg);
+      Alert.alert('Erro ao gerar cards', errorMessage(e, 'Erro desconhecido'));
     } finally {
       setGenerating(false);
     }
   };
 
   const handleRemove = (cardId: string) => {
+    delete pendingImagesRef.current[cardId];
     setCards(c => c.filter(x => x.id !== cardId));
   };
 
@@ -81,15 +104,21 @@ export default function AddCardsScreen() {
     if (!user || !deckId) return;
     setSaving(true);
     try {
-      await db.decks.addCards(
-        user.id,
-        deckId,
-        cards.map(c => ({ front: c.front, back: c.back })),
-      );
+      const payload: { front: string; back: string; images?: string[] }[] = [];
+      for (const c of cards) {
+        const pending = pendingImagesRef.current[c.id] ?? [];
+        const urls =
+          pending.length > 0 ? await uploadCardImages(user.id, pending) : [];
+        payload.push({
+          front: c.front,
+          back: c.back,
+          ...(urls.length > 0 ? { images: urls } : {}),
+        });
+      }
+      await db.decks.addCards(user.id, deckId, payload);
       router.back();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Erro ao salvar.';
-      Alert.alert('Erro', msg);
+      Alert.alert('Erro', errorMessage(e, 'Erro ao salvar.'));
     } finally {
       setSaving(false);
     }
@@ -164,6 +193,7 @@ export default function AddCardsScreen() {
                 numberOfLines={3}
                 style={{ height: 80, textAlignVertical: 'top', paddingTop: 12 }}
               />
+              <CardImagePicker images={newImages} onChange={setNewImages} />
               <Button
                 variant="secondary"
                 size="md"
@@ -193,6 +223,11 @@ export default function AddCardsScreen() {
                 value={cardCount}
                 onChangeText={setCardCount}
                 keyboardType="number-pad"
+              />
+              <CardImagePicker
+                images={aiImages}
+                onChange={setAiImages}
+                label="Imagens de contexto (opcional)"
               />
               <Button
                 variant="primary"
@@ -233,6 +268,11 @@ export default function AddCardsScreen() {
                     <Text className="text-outline font-inter-regular text-xs mt-1.5 leading-4">
                       {card.back}
                     </Text>
+                    {card.images.length > 0 && (
+                      <View className="mt-2 items-start">
+                        <CardImages images={card.images} size={44} />
+                      </View>
+                    )}
                   </View>
                   <TouchableOpacity
                     onPress={() => handleRemove(card.id)}

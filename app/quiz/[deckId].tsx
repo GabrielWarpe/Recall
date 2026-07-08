@@ -1,5 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  useWindowDimensions,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,9 +17,13 @@ import { useStudySession } from '@/hooks/useStudySession';
 import { useSettings } from '@/contexts/SettingsContext';
 import { deckSupportsQuiz } from '@/utils/practice';
 import { Button } from '@/components/ui/Button';
+import { cardShadow } from '@/components/ui/Card';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 const OPTION_COUNT = 4;
+// Altura da imagem-destaque como fração da altura da tela — grande o
+// suficiente para dar contexto visual sem empurrar as alternativas para fora.
+const QUIZ_HERO_HEIGHT_RATIO = 0.42;
 
 interface QuizOption {
   text: string;
@@ -51,6 +62,7 @@ export default function QuizScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const { settings } = useSettings();
+  const { height: screenHeight } = useWindowDimensions();
   const [deck, setDeck] = useState<Deck | null>(null);
   const [sessionStarted, setSessionStarted] = useState(false);
 
@@ -101,7 +113,12 @@ export default function QuizScreen() {
   if (!deckSupportsQuiz(deck)) {
     return (
       <SafeAreaView className="flex-1 bg-background items-center justify-center px-8">
-        <Text className="text-5xl mb-4">🧠</Text>
+        <View
+          className="w-20 h-20 rounded-card items-center justify-center mb-5"
+          style={{ backgroundColor: colors.primary + '22' }}
+        >
+          <Ionicons name="help-circle-outline" size={36} color={colors.primary} />
+        </View>
         <Text className="text-on-surface font-jakarta-bold text-2xl text-center">
           Quiz indisponível
         </Text>
@@ -182,7 +199,14 @@ export default function QuizScreen() {
     const reviewed = session.correctCount + session.hardCount;
     const accuracy =
       reviewed > 0 ? Math.round((session.correctCount / reviewed) * 100) : 0;
-    const emoji = accuracy >= 80 ? '🏆' : accuracy >= 50 ? '💪' : '📖';
+    const resultIcon =
+      accuracy >= 80 ? 'trophy' : accuracy >= 50 ? 'trending-up' : 'book';
+    const resultTint =
+      accuracy >= 80
+        ? colors.tertiary
+        : accuracy >= 50
+          ? colors.primary
+          : colors.info;
     const message =
       accuracy >= 100
         ? 'Perfeito! Nenhum erro no quiz. 🌟'
@@ -195,7 +219,12 @@ export default function QuizScreen() {
     return (
       <SafeAreaView className="flex-1 bg-background px-8">
         <View className="flex-1 items-center justify-center">
-          <Text className="text-6xl mb-4">{emoji}</Text>
+          <View
+            className="w-20 h-20 rounded-card items-center justify-center mb-5"
+            style={{ backgroundColor: resultTint + '22' }}
+          >
+            <Ionicons name={resultIcon} size={38} color={resultTint} />
+          </View>
           <Text className="text-on-surface font-jakarta-extrabold text-3xl text-center">
             Quiz concluído!
           </Text>
@@ -207,7 +236,7 @@ export default function QuizScreen() {
           </Text>
 
           <View className="w-full mt-8 flex-row gap-3">
-            <View className="flex-1 bg-surface-container rounded-card p-4 items-center border border-outline-variant/20">
+            <View className="flex-1 bg-surface-container rounded-card p-4 items-center" style={cardShadow}>
               <Text className="text-on-surface font-jakarta-extrabold text-3xl">
                 {session.correctCount}
               </Text>
@@ -215,7 +244,7 @@ export default function QuizScreen() {
                 De primeira
               </Text>
             </View>
-            <View className="flex-1 bg-surface-container rounded-card p-4 items-center border border-outline-variant/20">
+            <View className="flex-1 bg-surface-container rounded-card p-4 items-center" style={cardShadow}>
               <Text className="text-on-surface font-jakarta-extrabold text-3xl">
                 {session.hardCount}
               </Text>
@@ -223,7 +252,7 @@ export default function QuizScreen() {
                 Recuperados
               </Text>
             </View>
-            <View className="flex-1 bg-surface-container rounded-card p-4 items-center border border-outline-variant/20">
+            <View className="flex-1 bg-surface-container rounded-card p-4 items-center" style={cardShadow}>
               <Text className="text-on-surface font-jakarta-extrabold text-3xl">
                 {accuracy}%
               </Text>
@@ -274,7 +303,7 @@ export default function QuizScreen() {
             className="text-on-surface font-jakarta-semibold text-base text-center"
             numberOfLines={1}
           >
-            🧠 {deck.title}
+            {deck.title}
           </Text>
         </View>
         <View className="w-10 items-end">
@@ -285,10 +314,10 @@ export default function QuizScreen() {
       </View>
 
       {/* Progress bar */}
-      <View className="mx-6 mb-2">
-        <View className="h-1 bg-surface-container-high rounded-full overflow-hidden">
+      <View className="mx-5 mb-2">
+        <View className="h-1 bg-surface-container-high rounded-pill overflow-hidden">
           <View
-            className="h-full rounded-full bg-primary-container"
+            className="h-full rounded-pill bg-primary"
             style={{ width: `${progress * 100}%` }}
           />
         </View>
@@ -300,8 +329,22 @@ export default function QuizScreen() {
           contentContainerStyle={{ padding: 24, gap: 16 }}
           showsVerticalScrollIndicator={false}
         >
+          {/* Imagem-destaque (só a primeira, se o card tiver imagens) */}
+          {currentCard.images.length > 0 && (
+            <Image
+              source={{ uri: currentCard.images[0] }}
+              resizeMode="cover"
+              style={{
+                width: '100%',
+                height: screenHeight * QUIZ_HERO_HEIGHT_RATIO,
+                borderRadius: 16,
+              }}
+              className="bg-surface-container-high"
+            />
+          )}
+
           {/* Pergunta */}
-          <View className="bg-surface-container rounded-card p-6 border border-outline-variant/20">
+          <View className="bg-surface-container rounded-card p-6" style={cardShadow}>
             <Text className="text-outline font-inter-semibold text-xs tracking-widest mb-2">
               PERGUNTA
             </Text>
@@ -329,10 +372,10 @@ export default function QuizScreen() {
                   activeOpacity={0.8}
                   className={`rounded-card px-4 py-4 border ${
                     showCorrect
-                      ? 'bg-green-500/15 border-green-500'
+                      ? 'bg-success/15 border-success'
                       : showWrong
                         ? 'bg-error/15 border-error'
-                        : 'bg-surface-container border-outline-variant/20'
+                        : 'bg-surface-container border-outline-variant'
                   }`}
                 >
                   {/* Esmaecimento na View interna, fora da animação do Touchable */}
@@ -343,7 +386,7 @@ export default function QuizScreen() {
                     <Text
                       className={`flex-1 font-inter-medium text-base leading-6 ${
                         showCorrect
-                          ? 'text-green-400'
+                          ? 'text-success'
                           : showWrong
                             ? 'text-error'
                             : 'text-on-surface'
@@ -355,7 +398,7 @@ export default function QuizScreen() {
                       <Ionicons
                         name="checkmark-circle"
                         size={22}
-                        color="#4ade80"
+                        color={colors.success}
                       />
                     )}
                     {showWrong && (
@@ -376,7 +419,7 @@ export default function QuizScreen() {
             <View className="gap-3 mt-1">
               <Text
                 className={`font-inter-semibold text-sm text-center ${
-                  answeredCorrectly ? 'text-green-400' : 'text-error'
+                  answeredCorrectly ? 'text-success' : 'text-error'
                 }`}
               >
                 {answeredCorrectly

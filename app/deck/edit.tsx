@@ -12,8 +12,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '@/services/database';
+import { errorMessage } from '@/utils/errors';
 import { useDecks } from '@/hooks/useDecks';
-import { DECK_COLORS, DECK_EMOJIS } from '@/constants/theme';
+import { DECK_COLORS } from '@/constants/theme';
+import { EmojiPickerField } from '@/components/EmojiPickerField';
 import { Input } from '@/components/ui/Input';
 import { TagInput } from '@/components/TagInput';
 import { useThemeColors } from '@/hooks/useThemeColors';
@@ -26,7 +28,7 @@ export default function EditDeckScreen() {
 
   const [title, setTitle] = useState('');
   const [selectedColor, setSelectedColor] = useState(DECK_COLORS[0]!);
-  const [selectedEmoji, setSelectedEmoji] = useState(DECK_EMOJIS[0]!);
+  const [selectedEmoji, setSelectedEmoji] = useState('📚');
   const [tags, setTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -57,16 +59,24 @@ export default function EditDeckScreen() {
     if (!id) return;
     setSaving(true);
     try {
-      await db.playlists.update(id, {
+      const base = {
         name: title.trim(),
         emoji: selectedEmoji,
         color: selectedColor,
-        tags,
-      });
+      };
+      try {
+        await db.playlists.update(id, { ...base, tags });
+      } catch (e) {
+        // Banco sem a coluna `tags`: salva os demais campos mesmo assim.
+        if (/tags/i.test(errorMessage(e, ''))) {
+          await db.playlists.update(id, base);
+        } else {
+          throw e;
+        }
+      }
       router.back();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Erro ao salvar.';
-      Alert.alert('Erro', msg);
+      Alert.alert('Erro', errorMessage(e, 'Erro ao salvar.'));
     } finally {
       setSaving(false);
     }
@@ -115,23 +125,7 @@ export default function EditDeckScreen() {
               <Text className="text-on-surface-variant font-inter-medium text-sm">
                 Ícone
               </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View className="flex-row gap-2">
-                  {DECK_EMOJIS.map(e => (
-                    <TouchableOpacity
-                      key={e}
-                      onPress={() => setSelectedEmoji(e)}
-                      className={`w-10 h-10 rounded-xl items-center justify-center ${
-                        selectedEmoji === e
-                          ? 'bg-primary/20 border border-primary'
-                          : 'bg-surface-container-high'
-                      }`}
-                    >
-                      <Text className="text-xl">{e}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
+              <EmojiPickerField value={selectedEmoji} onChange={setSelectedEmoji} />
             </View>
 
             {/* Color picker */}
@@ -147,7 +141,7 @@ export default function EditDeckScreen() {
                     className={`w-9 h-9 rounded-full border-2 ${
                       selectedColor === c
                         ? 'border-on-surface scale-110'
-                        : 'border-transparent'
+                        : 'border-outline-variant/40'
                     }`}
                     style={{ backgroundColor: c }}
                   />
