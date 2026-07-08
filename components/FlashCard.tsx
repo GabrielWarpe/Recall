@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, ImageBackground, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Dimensions } from 'react-native';
+import { ImageBackground } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
@@ -76,7 +77,9 @@ export function FlashCard({ card, flipped, onPress }: FlashCardProps) {
         {hasImage ? (
           <ImageBackground
             source={{ uri: card.images[0] }}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={0}
             style={{ flex: 1 }}
           >
             <View className="absolute top-4 right-4 bg-black/50 rounded-full px-3 py-1">

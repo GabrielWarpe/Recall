@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import {
   View,
-  Image,
   Modal,
   TouchableOpacity,
   Pressable,
   Text,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useThemeColors } from '@/hooks/useThemeColors';
 
 interface CardImagesProps {
   /** URLs (ou URIs locais) das imagens do card. */
@@ -22,6 +23,7 @@ interface CardImagesProps {
  */
 export function CardImages({ images, size = 64 }: CardImagesProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const colors = useThemeColors();
 
   if (images.length === 0) return null;
 
@@ -36,9 +38,17 @@ export function CardImages({ images, size = 64 }: CardImagesProps) {
           >
             <Image
               source={{ uri }}
-              style={{ width: size, height: size, borderRadius: 10 }}
-              className="bg-surface-container-high border border-outline-variant/30"
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={0}
+              style={{
+                width: size,
+                height: size,
+                borderRadius: 10,
+                backgroundColor: colors.surfaceContainerHigh,
+                borderWidth: 1,
+                borderColor: colors.outlineVariant + '4D',
+              }}
             />
           </TouchableOpacity>
         ))}
@@ -58,8 +68,10 @@ export function CardImages({ images, size = 64 }: CardImagesProps) {
           {openIndex !== null && images[openIndex] != null && (
             <Image
               source={{ uri: images[openIndex] }}
+              contentFit="contain"
+              cachePolicy="memory-disk"
+              transition={0}
               style={{ width: '100%', height: '80%' }}
-              resizeMode="contain"
             />
           )}
           <TouchableOpacity

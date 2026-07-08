@@ -4,9 +4,9 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Image,
   useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -333,13 +333,15 @@ export default function QuizScreen() {
           {currentCard.images.length > 0 && (
             <Image
               source={{ uri: currentCard.images[0] }}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={0}
               style={{
                 width: '100%',
                 height: screenHeight * QUIZ_HERO_HEIGHT_RATIO,
                 borderRadius: 16,
+                backgroundColor: colors.surfaceContainerHigh,
               }}
-              className="bg-surface-container-high"
             />
           )}
 

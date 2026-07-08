@@ -1,6 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Crypto from 'expo-crypto';
+import { Image } from 'expo-image';
 import { supabase } from './supabase';
 
 /**
@@ -11,6 +12,20 @@ import { supabase } from './supabase';
  * as URLs seguem válidas em decks exportados/compartilhados. O nome do
  * arquivo é o SHA-256 do conteúdo, então a mesma imagem nunca é duplicada.
  */
+
+/**
+ * Pré-carrega (memória + disco) as imagens remotas de um conjunto de cards.
+ * Chamado no início da sessão de estudo para que cada card apareça com a
+ * imagem já pronta, sem espera de rede.
+ */
+export function prefetchCardImages(cards: { images: string[] }[]): void {
+  const urls = [...new Set(cards.flatMap(c => c.images))].filter(u =>
+    /^https?:\/\//.test(u),
+  );
+  if (urls.length > 0) {
+    void Image.prefetch(urls, { cachePolicy: 'memory-disk' });
+  }
+}
 
 export const MAX_IMAGES_PER_CARD = 4;
 const MAX_DIMENSION = 1600; // px no lado maior — qualidade boa, upload leve

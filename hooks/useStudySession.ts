@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import type { Flashcard, Deck, Grade, StudyPhase } from '@/types';
 import { reviewCard } from '@/services/ai';
 import { db } from '@/services/database';
+import { prefetchCardImages } from '@/services/images';
 import {
   fireStreakNotification,
   syncReminders,
@@ -35,6 +36,9 @@ export function useStudySession(deck: Deck | null) {
       const ordered = settings.shuffle
         ? [...studyCards].sort(() => Math.random() - 0.5)
         : [...studyCards];
+      // Baixa as imagens da sessão de antemão: quando o card chegar ao topo
+      // da fila, ela já está no cache do expo-image e aparece na hora.
+      prefetchCardImages(ordered);
       setQueue(ordered);
       setTotal(ordered.length);
       setDone(0);
