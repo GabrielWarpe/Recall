@@ -104,7 +104,6 @@ export function useStudySession(deck: Deck | null) {
             reminderTime: settings.reminderTime,
             streakAlert: settings.streakAlert,
             userId: user.id,
-            newPerSession: settings.newPerSession,
           });
         })();
       }
@@ -117,7 +116,6 @@ export function useStudySession(deck: Deck | null) {
       settings.streakAlert,
       settings.studyReminder,
       settings.reminderTime,
-      settings.newPerSession,
     ],
   );
 

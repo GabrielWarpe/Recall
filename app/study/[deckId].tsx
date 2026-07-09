@@ -7,7 +7,6 @@ import type { Deck } from '@/types';
 import { db } from '@/services/database';
 import { getSessionCards } from '@/services/ai';
 import { useStudySession } from '@/hooks/useStudySession';
-import { useSettings } from '@/contexts/SettingsContext';
 import { deckSupportsQuiz, cardSupportsQuiz } from '@/utils/practice';
 import { SwipeCard } from '@/components/SwipeCard';
 import { QuizQuestion } from '@/components/QuizQuestion';
@@ -30,7 +29,6 @@ export default function StudySessionScreen() {
   }>();
   const router = useRouter();
   const colors = useThemeColors();
-  const { settings } = useSettings();
   const [deck, setDeck] = useState<Deck | null>(null);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [noDue, setNoDue] = useState(false);
@@ -59,14 +57,14 @@ export default function StudySessionScreen() {
   // a revisar, mostra o estado "tudo em dia" com a opção de praticar mesmo assim.
   useEffect(() => {
     if (!deck || sessionStarted || noDue) return;
-    const cards = getSessionCards(deck, settings.newPerSession);
+    const cards = getSessionCards(deck);
     if (cards.length > 0) {
       session.start(cards);
       setSessionStarted(true);
     } else {
       setNoDue(true);
     }
-  }, [deck, sessionStarted, noDue, settings.newPerSession]);
+  }, [deck, sessionStarted, noDue]);
 
   if (!deck) return null;
 

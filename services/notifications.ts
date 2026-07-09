@@ -19,8 +19,6 @@ export interface ReminderConfig {
   streakAlert: boolean;
   /** Dono dos decks — sem ele o lembrete de estudo não é agendado. */
   userId?: string | null;
-  /** Limite de cards novos por sessão (entra na contagem de "para revisar"). */
-  newPerSession?: number;
 }
 
 /** Quantos dias à frente agendamos lembretes com contagem exata. */
@@ -81,15 +79,12 @@ export async function fireStreakNotification(days: number): Promise<void> {
  * o mesmo critério do "Revisar hoje" da Home. Como `nextReview` só muda
  * quando o card é revisado, a contagem futura é determinística.
  */
-function dueCountAt(decks: Deck[], newLimit: number, at: Date): number {
+function dueCountAt(decks: Deck[], at: Date): number {
   return decks.reduce((sum, deck) => {
     const due = deck.cards.filter(
       c => c.repetitions > 0 && new Date(c.nextReview) <= at,
     ).length;
-    const news = Math.min(
-      deck.cards.filter(c => c.repetitions === 0).length,
-      Math.max(0, newLimit),
-    );
+    const news = deck.cards.filter(c => c.repetitions === 0).length;
     return sum + due + news;
   }, 0);
 }
@@ -142,12 +137,11 @@ async function scheduleStudyReminders(
   if (totalCards === 0) return; // nada para estudar, nada para lembrar
 
   const now = new Date();
-  const newLimit = cfg.newPerSession ?? 10;
 
   for (let day = 0; day < REMINDER_HORIZON_DAYS; day++) {
     const fireDate = dateAt(day, hour, minute);
     if (fireDate <= now) continue; // horário de hoje já passou
-    const count = dueCountAt(decks, newLimit, fireDate);
+    const count = dueCountAt(decks, fireDate);
     if (count === 0) continue; // dia em dia com as revisões: não incomoda
     await Notifications.scheduleNotificationAsync({
       content: {

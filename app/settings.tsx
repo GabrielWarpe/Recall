@@ -192,18 +192,6 @@ export default function SettingsScreen() {
             }
           />
           <SettingsRow
-            icon="add-circle"
-            iconColor="#9ef0b0"
-            title="Novos cartões por sessão"
-            subtitle="Quantos cartões inéditos entram em cada revisão"
-            value={String(settings.newPerSession)}
-            onPress={() =>
-              pickOption('Novos por sessão', ['5', '10', '15', '20', '30'], v =>
-                update('newPerSession', parseInt(v, 10)),
-              )
-            }
-          />
-          <SettingsRow
             icon="shuffle"
             iconColor={colors.primary}
             title="Embaralhar cartões"

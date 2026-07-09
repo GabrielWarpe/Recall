@@ -1,172 +1,8 @@
 import type { Flashcard, Deck, Grade } from '@/types';
-import { storage } from './storage';
 
-interface GeneratedCard {
-  front: string;
-  back: string;
-  /** Alternativas ERRADAS do quiz, geradas junto com a pergunta. */
-  options?: string[];
-}
-
-/** Bloco de conteúdo enviado à API (texto, imagem ou documento PDF). */
-type ContentBlock =
-  | { type: 'text'; text: string }
-  | {
-      type: 'image';
-      source: { type: 'base64'; media_type: string; data: string };
-    }
-  | {
-      type: 'document';
-      source: { type: 'base64'; media_type: 'application/pdf'; data: string };
-    };
-
-/** Arquivo já lido em base64, pronto para virar cards por IA. */
-export interface FileAttachment {
-  base64: string;
-  mimeType: string;
-}
-
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-
-const CARD_INSTRUCTIONS = `Return ONLY a valid JSON array with no other text. Each item must have "front" (question or concept), "back" (the correct answer or explanation) and "options" (an array of exactly 3 plausible but INCORRECT answer choices for a multiple-choice quiz about that question). The wrong options must be related to the question, in the same style and similar length as the correct answer, and must never repeat the correct answer. Keep each card concise and focused on a single idea. Write everything in the same language as the source content.`;
-
-/** Chamada única à API: monta a requisição, valida e extrai o array de cards. */
-async function requestCards(
-  content: string | ContentBlock[],
-): Promise<GeneratedCard[]> {
-  // A chave da IA vem do ambiente (.env) ou de uma config local legada.
-  const envKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
-  const apiKey = envKey || (await storage.getSettings()).apiKey;
-  if (!apiKey) {
-    throw new Error(
-      'Chave da API não configurada. Defina EXPO_PUBLIC_ANTHROPIC_API_KEY no arquivo .env.',
-    );
-  }
-
-  const response = await fetch(ANTHROPIC_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      messages: [{ role: 'user', content }],
-    }),
-  });
-
-  if (!response.ok) {
-    const err = (await response.json().catch(() => ({}))) as {
-      error?: { message?: string };
-    };
-    throw new Error(err.error?.message ?? `Erro na API: ${response.status}`);
-  }
-
-  const data = (await response.json()) as { content?: Array<{ text?: string }> };
-  const text = data.content?.[0]?.text ?? '';
-
-  const jsonMatch = text.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) {
-    throw new Error('Não foi possível interpretar a resposta da IA como JSON.');
-  }
-
-  const cards = JSON.parse(jsonMatch[0]) as GeneratedCard[];
-  if (!Array.isArray(cards)) {
-    throw new Error('Resposta da IA não é um array válido.');
-  }
-
-  // Sanitiza as alternativas: strings não vazias, diferentes da correta,
-  // sem duplicatas e no máximo 3.
-  return cards
-    .filter(c => c.front && c.back)
-    .map(c => ({
-      ...c,
-      options: [
-        ...new Set(
-          (Array.isArray(c.options) ? c.options : [])
-            .filter((o): o is string => typeof o === 'string')
-            .map(o => o.trim())
-            .filter(o => o.length > 0 && o !== c.back.trim()),
-        ),
-      ].slice(0, 3),
-    }));
-}
-
-/**
- * Gera cards a partir de um tópico/texto e, opcionalmente, imagens de contexto
- * (foto de página de livro, print de aula, diagrama, exercício...). Texto e
- * imagens vão juntos na mesma mensagem para o modelo.
- */
-export async function generateFlashcards(
-  input: string,
-  count: number = 10,
-  images: FileAttachment[] = [],
-): Promise<GeneratedCard[]> {
-  const source = input.trim();
-
-  if (images.length === 0) {
-    const prompt = `Generate exactly ${count} educational flashcards about the following topic or content.
-
-${CARD_INSTRUCTIONS}
-
-Content:
-${source}`;
-    return requestCards(prompt);
-  }
-
-  const imageBlocks: ContentBlock[] = images.map(img => ({
-    type: 'image',
-    source: { type: 'base64', media_type: img.mimeType, data: img.base64 },
-  }));
-
-  const prompt = `Generate exactly ${count} educational flashcards from the attached image(s)${
-    source ? ' and the notes below' : ''
-  }.
-
-${CARD_INSTRUCTIONS}${
-    source
-      ? `
-
-Notes:
-${source}`
-      : ''
-  }`;
-
-  return requestCards([...imageBlocks, { type: 'text', text: prompt }]);
-}
-
-/**
- * Gera cards a partir de um arquivo (PDF ou imagem). O Claude lê o PDF/imagem
- * nativamente — sem parser local. Limites da API: 32 MB por requisição e 600
- * páginas por PDF.
- */
-export async function generateFlashcardsFromFile(
-  file: FileAttachment,
-  count: number = 10,
-): Promise<GeneratedCard[]> {
-  const fileBlock: ContentBlock =
-    file.mimeType === 'application/pdf'
-      ? {
-          type: 'document',
-          source: {
-            type: 'base64',
-            media_type: 'application/pdf',
-            data: file.base64,
-          },
-        }
-      : {
-          type: 'image',
-          source: { type: 'base64', media_type: file.mimeType, data: file.base64 },
-        };
-
-  const prompt = `Generate exactly ${count} educational flashcards from the attached file.
-
-${CARD_INSTRUCTIONS}`;
-
-  return requestCards([fileBlock, { type: 'text', text: prompt }]);
-}
+// A geração por IA vive na Edge Function `generate-cards` (backend) — o
+// cliente fica em lib/api/generateCards.ts. Aqui restam apenas o SM-2 e os
+// utilitários de sessão/estatística dos cards.
 
 export function makeFlashcard(
   front: string,
@@ -247,15 +83,10 @@ export function getNewCards(deck: Pick<Deck, 'cards'>): Flashcard[] {
 
 /**
  * Monta a lista de uma sessão de repetição espaçada: todos os cards devidos +
- * até `newLimit` cards novos. Se `newLimit` for 0 ou negativo, não inclui novos.
+ * todos os cards novos (nunca estudados).
  */
-export function getSessionCards(
-  deck: Pick<Deck, 'cards'>,
-  newLimit: number,
-): Flashcard[] {
-  const due = getDueCards(deck);
-  const news = newLimit > 0 ? getNewCards(deck).slice(0, newLimit) : [];
-  return [...due, ...news];
+export function getSessionCards(deck: Pick<Deck, 'cards'>): Flashcard[] {
+  return [...getDueCards(deck), ...getNewCards(deck)];
 }
 
 export type Maturity = 'new' | 'learning' | 'young' | 'mature';

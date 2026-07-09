@@ -11,14 +11,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
 import type { Flashcard } from '@/types';
-import {
-  generateFlashcards,
-  generateFlashcardsFromFile,
-  makeFlashcard,
-} from '@/services/ai';
+import { makeFlashcard } from '@/services/ai';
+import { AiGeneratorForm } from '@/components/AiGeneratorForm';
 import {
   uploadCardImages,
   imageToDataUri,
@@ -61,18 +56,8 @@ export default function CreateDeckScreen() {
     a.localeCompare(b, 'pt'),
   );
 
-  // AI mode
-  const [aiTopic, setAiTopic] = useState('');
-  const [cardCount, setCardCount] = useState('10');
+  // AI mode (o formulário em si vive no AiGeneratorForm)
   const [generatedCards, setGeneratedCards] = useState<Flashcard[]>([]);
-  const [generating, setGenerating] = useState(false);
-  const [pickedFile, setPickedFile] = useState<{
-    name: string;
-    base64: string;
-    mimeType: string;
-  } | null>(null);
-  // Imagens de CONTEXTO para a IA (página de livro, print, diagrama...).
-  const [aiImages, setAiImages] = useState<CardImage[]>([]);
 
   // Manual mode
   const [manualCards, setManualCards] = useState<Flashcard[]>([]);
@@ -86,84 +71,6 @@ export default function CreateDeckScreen() {
   const pendingImagesRef = useRef<Record<string, CardImage[]>>({});
 
   const cards = mode === 'ai' ? generatedCards : manualCards;
-
-  const handleGenerate = async () => {
-    if (!pickedFile && !aiTopic.trim() && aiImages.length === 0) {
-      Alert.alert(
-        'Atenção',
-        'Digite um tópico, anexe um arquivo ou adicione imagens.',
-      );
-      return;
-    }
-    setGenerating(true);
-    try {
-      const count = Math.min(Math.max(parseInt(cardCount, 10) || 10, 1), 30);
-      const raw = pickedFile
-        ? await generateFlashcardsFromFile(
-            { base64: pickedFile.base64, mimeType: pickedFile.mimeType },
-            count,
-          )
-        : await generateFlashcards(
-            aiTopic,
-            count,
-            // Imagens comprimidas em JPEG viram contexto do prompt.
-            aiImages
-              .filter(img => img.base64)
-              .map(img => ({ base64: img.base64!, mimeType: 'image/jpeg' })),
-          );
-      setGeneratedCards(
-        raw.map(c => makeFlashcard(c.front, c.back, [], c.options ?? [])),
-      );
-    } catch (e: unknown) {
-      Alert.alert('Erro ao gerar cards', errorMessage(e, 'Erro desconhecido'));
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const handlePickFile = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/plain', 'application/pdf', 'image/*'],
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled) return;
-      const file = result.assets[0];
-      if (!file) return;
-
-      // .txt continua sendo lido como texto no campo de tópico.
-      if (file.mimeType === 'text/plain') {
-        const text = await FileSystem.readAsStringAsync(file.uri);
-        setAiTopic(text.slice(0, 3000));
-        setPickedFile(null);
-        return;
-      }
-
-      const isPdf = file.mimeType === 'application/pdf';
-      const isImage = file.mimeType?.startsWith('image/') ?? false;
-      if (!isPdf && !isImage) {
-        Alert.alert(
-          'Formato não suportado',
-          'Selecione um PDF, uma imagem ou um arquivo de texto.',
-        );
-        return;
-      }
-      // Limite da API: 32 MB por requisição; o base64 infla ~33%.
-      if (file.size != null && file.size > 24 * 1024 * 1024) {
-        Alert.alert('Arquivo muito grande', 'Escolha um arquivo de até 24 MB.');
-        return;
-      }
-
-      const base64 = await new FileSystem.File(file.uri).base64();
-      setPickedFile({
-        name: file.name,
-        base64,
-        mimeType: file.mimeType ?? (isPdf ? 'application/pdf' : 'image/jpeg'),
-      });
-    } catch {
-      Alert.alert('Erro', 'Não foi possível ler o arquivo.');
-    }
-  };
 
   const handleAddManualCard = () => {
     if (!newFront.trim() || !newBack.trim()) return;
@@ -347,87 +254,7 @@ export default function CreateDeckScreen() {
           </View>
 
           {/* AI Mode */}
-          {mode === 'ai' && (
-            <View className="gap-4">
-              <Input
-                label="Tópico ou conteúdo"
-                placeholder="Ex: Fotossíntese, Hooks do React, Segunda Guerra Mundial..."
-                value={aiTopic}
-                onChangeText={setAiTopic}
-                multiline
-                numberOfLines={5}
-                style={{ height: 110, textAlignVertical: 'top', paddingTop: 12 }}
-              />
-              <View className="flex-row gap-3 items-end">
-                <View className="flex-1">
-                  <Input
-                    label="Quantidade de cards"
-                    placeholder="10"
-                    value={cardCount}
-                    onChangeText={setCardCount}
-                    keyboardType="number-pad"
-                  />
-                </View>
-                <Button
-                  variant="outline"
-                  size="md"
-                  onPress={() => void handlePickFile()}
-                >
-                  Arquivo
-                </Button>
-              </View>
-
-              {pickedFile && (
-                <View className="gap-1">
-                  <View className="flex-row items-center gap-2 bg-surface-container rounded-card px-3 py-2.5" style={cardShadow}>
-                    <Ionicons
-                      name={
-                        pickedFile.mimeType === 'application/pdf'
-                          ? 'document-text'
-                          : 'image'
-                      }
-                      size={18}
-                      color={colors.primary}
-                    />
-                    <Text
-                      className="flex-1 text-on-surface font-inter-medium text-sm"
-                      numberOfLines={1}
-                    >
-                      {pickedFile.name}
-                    </Text>
-                    <TouchableOpacity onPress={() => setPickedFile(null)}>
-                      <Ionicons
-                        name="close-circle"
-                        size={18}
-                        color={colors.outline}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                  <Text className="text-outline font-inter-regular text-xs">
-                    Os cards serão gerados a partir deste arquivo.
-                  </Text>
-                </View>
-              )}
-
-              {/* Imagens de contexto para a IA (fotos de página, prints...) */}
-              {!pickedFile && (
-                <CardImagePicker
-                  images={aiImages}
-                  onChange={setAiImages}
-                  label="Imagens de contexto (opcional)"
-                />
-              )}
-
-              <Button
-                variant="primary"
-                size="lg"
-                onPress={() => void handleGenerate()}
-                loading={generating}
-              >
-                {generating ? 'Gerando cards...' : 'Gerar flashcards'}
-              </Button>
-            </View>
-          )}
+          {mode === 'ai' && <AiGeneratorForm onGenerated={setGeneratedCards} />}
 
           {/* Manual Mode */}
           {mode === 'manual' && (

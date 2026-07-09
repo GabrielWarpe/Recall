@@ -58,14 +58,12 @@ function NotificationController() {
       reminderTime: settings.reminderTime,
       streakAlert: settings.streakAlert,
       userId: user?.id,
-      newPerSession: settings.newPerSession,
     });
   }, [
     ready,
     settings.studyReminder,
     settings.reminderTime,
     settings.streakAlert,
-    settings.newPerSession,
     user?.id,
   ]);
   return null;

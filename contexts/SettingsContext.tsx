@@ -12,7 +12,6 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export interface AppSettings {
   // Estudo
-  newPerSession: number;
   shuffle: boolean;
   autoReveal: boolean;
   // Aparência
@@ -30,7 +29,6 @@ export interface AppSettings {
 }
 
 const DEFAULTS: AppSettings = {
-  newPerSession: 10,
   shuffle: true,
   autoReveal: false,
   theme: 'Escuro',
