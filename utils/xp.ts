@@ -56,6 +56,13 @@ export const LEVEL_TIERS: LevelTier[] = [
   { minLevel: 20, name: 'Lenda', emoji: '👑', color: '#eab308' },
 ];
 
+/** XP total acumulado necessário para ALCANÇAR um nível (nível 1 = 0 XP). */
+export function xpForLevelStart(level: number): number {
+  const n = Math.max(0, Math.floor(level) - 1);
+  // Soma de BASE * (1 + 2 + … + n): custo de todos os níveis anteriores.
+  return (BASE * n * (n + 1)) / 2;
+}
+
 /** Patente atual para um dado nível. */
 export function tierForLevel(level: number): LevelTier {
   let tier = LEVEL_TIERS[0]!;

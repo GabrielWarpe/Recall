@@ -103,7 +103,7 @@ function rowToSession(
       : 0;
   return {
     id: row.id,
-    deckId: row.playlist_id,
+    deckId: row.playlist_id ?? '',
     deckTitle,
     date: row.started_at,
     correct: row.correct_count,
@@ -293,7 +293,7 @@ export const db = {
       if (error) throw error;
       type JoinedRow = StudySessionRow & { playlists: { name: string } | null };
       return ((data ?? []) as JoinedRow[]).map(row =>
-        rowToSession(row, row.playlists?.name ?? 'Deck'),
+        rowToSession(row, row.playlists?.name ?? 'Deck excluído'),
       );
     },
   },

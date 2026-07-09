@@ -50,11 +50,12 @@ create table if not exists flashcards (
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
--- Sessões de estudo
+-- Sessões de estudo. `playlist_id` usa ON DELETE SET NULL de propósito: o
+-- histórico (e o XP/streak derivados dele) sobrevive à exclusão do deck.
 create table if not exists study_sessions (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references profiles(id) on delete cascade not null,
-  playlist_id uuid references playlists(id) on delete cascade not null,
+  playlist_id uuid references playlists(id) on delete set null,
   started_at timestamp with time zone default now(),
   ended_at timestamp with time zone,
   cards_reviewed integer default 0,
@@ -127,6 +128,13 @@ alter table playlists add column if not exists tags text[] not null default '{}'
 alter table playlists add column if not exists cover_url text;
 alter table playlists add column if not exists description text;
 alter table flashcards add column if not exists quiz_options text[] not null default '{}';
+
+-- Excluir um deck NÃO pode apagar o histórico de sessões (o XP e a sequência
+-- são derivados dele). Migra o vínculo de CASCADE para SET NULL.
+alter table study_sessions alter column playlist_id drop not null;
+alter table study_sessions drop constraint if exists study_sessions_playlist_id_fkey;
+alter table study_sessions add constraint study_sessions_playlist_id_fkey
+  foreign key (playlist_id) references playlists(id) on delete set null;
 
 -- Força o PostgREST a recarregar o cache do schema (às vezes ele demora a ver
 -- colunas novas e continua respondendo "column not found").

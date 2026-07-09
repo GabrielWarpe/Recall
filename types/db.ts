@@ -60,7 +60,8 @@ export interface FlashcardRow {
 export interface StudySessionRow {
   id: string;
   user_id: string;
-  playlist_id: string;
+  /** null quando o deck foi excluído (o histórico permanece). */
+  playlist_id: string | null;
   started_at: string;
   ended_at: string | null;
   cards_reviewed: number;

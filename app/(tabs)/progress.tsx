@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { format, subDays } from 'date-fns';
 import { db } from '@/services/database';
@@ -155,7 +155,13 @@ export default function ProgressScreen() {
           <StreakBadge streak={streak} size="md" />
         </View>
 
-        {/* Patente / Nível / XP */}
+        {/* Patente / Nível / XP — toca para ver todos os níveis */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          // Cast: a rota /levels só entra nos tipos gerados no próximo
+          // `expo start` (typed routes).
+          onPress={() => router.push('/levels' as Href)}
+        >
         <Card className="mx-5 mb-4 p-5">
           <View className="flex-row items-center">
             {/* Emblema da patente */}
@@ -186,6 +192,12 @@ export default function ProgressScreen() {
                 XP total
               </Text>
             </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.outline}
+              style={{ marginLeft: 8 }}
+            />
           </View>
 
           {/* Barra de progresso do nível atual */}
@@ -212,6 +224,7 @@ export default function ProgressScreen() {
             )}
           </View>
         </Card>
+        </TouchableOpacity>
 
         {/* Heatmap de atividade */}
         <Card className="mx-5 mt-4 p-5">

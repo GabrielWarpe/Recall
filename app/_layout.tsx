@@ -221,6 +221,10 @@ function RootNavigator() {
         name="achievements"
         options={{ animation: 'slide_from_right' }}
       />
+      <Stack.Screen
+        name="levels"
+        options={{ animation: 'slide_from_right' }}
+      />
       <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
     </Stack>
   );
