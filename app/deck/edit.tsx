@@ -13,9 +13,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '@/services/database';
 import { errorMessage } from '@/utils/errors';
+import { useAuth } from '@/contexts/AuthContext';
 import { useDecks } from '@/hooks/useDecks';
-import { DECK_COLORS, resolveDeckColor } from '@/constants/theme';
-import { EmojiPickerField } from '@/components/EmojiPickerField';
+import { uploadCardImages, type CardImage } from '@/services/images';
+import { DeckCoverPicker } from '@/components/DeckCoverPicker';
 import { Input } from '@/components/ui/Input';
 import { TagInput } from '@/components/TagInput';
 import { useThemeColors } from '@/hooks/useThemeColors';
@@ -24,11 +25,11 @@ export default function EditDeckScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const colors = useThemeColors();
+  const { user } = useAuth();
   const { decks } = useDecks();
 
   const [title, setTitle] = useState('');
-  const [selectedColor, setSelectedColor] = useState(DECK_COLORS[0]!);
-  const [selectedEmoji, setSelectedEmoji] = useState('📚');
+  const [cover, setCover] = useState<CardImage | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -43,8 +44,7 @@ export default function EditDeckScreen() {
     void db.decks.getOne(id).then(d => {
       if (d) {
         setTitle(d.title);
-        setSelectedColor(d.color);
-        setSelectedEmoji(d.emoji);
+        setCover(d.coverUrl ? { uri: d.coverUrl } : null);
         setTags(d.tags);
       }
       setLoading(false);
@@ -56,20 +56,20 @@ export default function EditDeckScreen() {
       Alert.alert('Atenção', 'Dê um título ao deck.');
       return;
     }
-    if (!id) return;
+    if (!id || !user) return;
     setSaving(true);
     try {
-      const base = {
-        name: title.trim(),
-        emoji: selectedEmoji,
-        color: selectedColor,
-      };
+      // Sobe a capa nova (se houver) e guarda a URL; sem capa → null.
+      const coverUrl = cover
+        ? ((await uploadCardImages(user.id, [cover]))[0] ?? null)
+        : null;
+      const base = { name: title.trim(), cover_url: coverUrl };
       try {
         await db.playlists.update(id, { ...base, tags });
       } catch (e) {
-        // Banco sem a coluna `tags`: salva os demais campos mesmo assim.
-        if (/tags/i.test(errorMessage(e, ''))) {
-          await db.playlists.update(id, base);
+        // Banco sem `tags`/`cover_url`: salva o que der em vez de quebrar.
+        if (/tags|cover_url/i.test(errorMessage(e, ''))) {
+          await db.playlists.update(id, { name: title.trim() });
         } else {
           throw e;
         }
@@ -120,34 +120,8 @@ export default function EditDeckScreen() {
               onChangeText={setTitle}
             />
 
-            {/* Emoji picker */}
-            <View className="gap-2">
-              <Text className="text-on-surface-variant font-inter-medium text-sm">
-                Ícone
-              </Text>
-              <EmojiPickerField value={selectedEmoji} onChange={setSelectedEmoji} />
-            </View>
-
-            {/* Color picker */}
-            <View className="gap-2">
-              <Text className="text-on-surface-variant font-inter-medium text-sm">
-                Cor
-              </Text>
-              <View className="flex-row gap-3 flex-wrap">
-                {DECK_COLORS.map(c => (
-                  <TouchableOpacity
-                    key={c}
-                    onPress={() => setSelectedColor(c)}
-                    className={`w-9 h-9 rounded-full border-2 ${
-                      resolveDeckColor(selectedColor) === c
-                        ? 'border-on-surface scale-110'
-                        : 'border-outline-variant/40'
-                    }`}
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
-              </View>
-            </View>
+            {/* Capa do deck */}
+            <DeckCoverPicker cover={cover} onChange={setCover} />
 
             {/* Tags */}
             <TagInput tags={tags} onChange={setTags} suggestions={allTags} />

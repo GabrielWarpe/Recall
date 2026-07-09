@@ -2,14 +2,13 @@ import React from 'react';
 import { View, Text, Modal, Pressable, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '@/hooks/useThemeColors';
-import { resolveDeckColor } from '@/constants/theme';
+import { DeckAvatar } from '@/components/DeckAvatar';
 import type { CardImportTarget } from '@/services/backup';
 
 interface DeckOption {
   id: string;
   title: string;
-  emoji: string;
-  color: string;
+  coverUrl: string | null;
 }
 
 interface Props {
@@ -91,38 +90,26 @@ export function DeckPickerModal({
               </Text>
             )}
 
-            {decks.map(d => {
-              const c = resolveDeckColor(d.color);
-              return (
-                <Pressable
-                  key={d.id}
-                  onPress={() => onPick({ type: 'existing', deckId: d.id })}
-                  className="flex-row items-center gap-3 rounded-button px-3 py-2.5"
+            {decks.map(d => (
+              <Pressable
+                key={d.id}
+                onPress={() => onPick({ type: 'existing', deckId: d.id })}
+                className="flex-row items-center gap-3 rounded-button px-3 py-2.5"
+              >
+                <DeckAvatar coverUrl={d.coverUrl} size={44} radius={12} />
+                <Text
+                  className="flex-1 text-on-surface font-inter-medium text-[15px]"
+                  numberOfLines={1}
                 >
-                  <View
-                    className="w-11 h-11 rounded-button items-center justify-center"
-                    style={{
-                      backgroundColor: c + '24',
-                      borderWidth: 1,
-                      borderColor: c + '55',
-                    }}
-                  >
-                    <Text className="text-xl">{d.emoji}</Text>
-                  </View>
-                  <Text
-                    className="flex-1 text-on-surface font-inter-medium text-[15px]"
-                    numberOfLines={1}
-                  >
-                    {d.title}
-                  </Text>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={18}
-                    color={colors.outline}
-                  />
-                </Pressable>
-              );
-            })}
+                  {d.title}
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={colors.outline}
+                />
+              </Pressable>
+            ))}
           </ScrollView>
 
           <TouchableOpacity

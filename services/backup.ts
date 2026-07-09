@@ -29,6 +29,8 @@ interface DeckExport {
   title: string;
   emoji: string;
   color: string;
+  /** URL pública da capa (opcional). */
+  coverUrl?: string | null;
   tags?: string[];
   cards: CardExport[];
 }
@@ -75,6 +77,7 @@ export interface ImportDeck {
   title: string;
   emoji: string;
   color: string;
+  coverUrl: string | null;
   tags: string[];
   cards: ImportCard[];
 }
@@ -123,6 +126,7 @@ function toDeckExport(d: Deck): DeckExport {
     title: d.title,
     emoji: d.emoji,
     color: d.color,
+    ...(d.coverUrl ? { coverUrl: d.coverUrl } : {}),
     tags: d.tags,
     cards: d.cards.map(toCardExport),
   };
@@ -280,6 +284,7 @@ function normalizeDeck(d: {
   title?: unknown;
   emoji?: unknown;
   color?: unknown;
+  coverUrl?: unknown;
   tags?: unknown;
   cards?: unknown;
 }): ImportDeck {
@@ -295,6 +300,10 @@ function normalizeDeck(d: {
     title: typeof d.title === 'string' ? d.title.trim() : '',
     emoji: typeof d.emoji === 'string' && d.emoji ? d.emoji : '📚',
     color: typeof d.color === 'string' && d.color ? d.color : DECK_COLORS[0]!,
+    coverUrl:
+      typeof d.coverUrl === 'string' && /^https?:\/\//.test(d.coverUrl)
+        ? d.coverUrl
+        : null,
     tags,
     cards: normalizeCards(d.cards),
   };
@@ -378,6 +387,7 @@ async function createDeck(userId: string, deck: ImportDeck, title: string): Prom
       title,
       emoji: deck.emoji,
       color: deck.color,
+      coverUrl: deck.coverUrl,
       sourceType: 'file',
       tags: deck.tags,
     },

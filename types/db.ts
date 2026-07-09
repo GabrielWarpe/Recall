@@ -27,6 +27,7 @@ export interface PlaylistRow {
   name: string;
   emoji: string;
   color: string;
+  cover_url: string | null;
   source_type: SourceType;
   tags: string[];
   created_at: string;

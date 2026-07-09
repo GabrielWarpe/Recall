@@ -21,6 +21,8 @@ export interface Deck {
   description: string;
   color: string;
   emoji: string;
+  /** Foto de capa (URL no Storage). Sem capa → ícone padrão "livrinho". */
+  coverUrl: string | null;
   tags: string[];
   cards: Flashcard[];
   createdAt: string;

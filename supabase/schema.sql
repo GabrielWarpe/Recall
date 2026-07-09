@@ -21,6 +21,7 @@ create table if not exists playlists (
   name text not null,
   emoji text default '📚',
   color text default '#7c3aed',
+  cover_url text,
   source_type text default 'manual',
   tags text[] not null default '{}',
   created_at timestamp with time zone default timezone('utc'::text, now()),

@@ -403,8 +403,7 @@ export default function DecksScreen() {
         decks={decks.map(d => ({
           id: d.id,
           title: d.title,
-          emoji: d.emoji,
-          color: d.color,
+          coverUrl: d.coverUrl,
         }))}
         cardCount={cardState?.cards.length ?? 0}
         sourceTitle={cardState?.source?.title ?? null}

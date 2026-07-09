@@ -11,6 +11,7 @@ import { getDueCards } from '@/services/ai';
 import { sessionAccuracy } from '@/utils/stats';
 import { Button } from '@/components/ui/Button';
 import { cardShadow } from '@/components/ui/Card';
+import { DeckAvatar } from '@/components/DeckAvatar';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 type Tab = 'cards' | 'history';
@@ -307,8 +308,8 @@ export default function DeckDetailScreen() {
             <Ionicons name="arrow-back" size={22} color={colors.onSurface} />
           </TouchableOpacity>
           <View className="flex-1 mx-2">
-            <View className="flex-row items-center gap-2">
-              <Text className="text-xl">{deck.emoji}</Text>
+            <View className="flex-row items-center gap-2.5">
+              <DeckAvatar coverUrl={deck.coverUrl} size={32} radius={9} />
               <Text
                 className="text-on-surface font-jakarta-bold text-xl flex-1"
                 numberOfLines={1}

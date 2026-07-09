@@ -7,7 +7,7 @@ import type { Deck } from '@/types';
 import { deckSupportsQuiz } from '@/utils/practice';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { cardShadow } from '@/components/ui/Card';
-import { resolveDeckColor } from '@/constants/theme';
+import { DeckAvatar } from '@/components/DeckAvatar';
 
 interface DeckCardProps {
   deck: Deck;
@@ -29,7 +29,6 @@ export function DeckCard({
 }: DeckCardProps) {
   const colors = useThemeColors();
   const totalCards = deck.cards.length;
-  const deckColor = resolveDeckColor(deck.color);
 
   // Modos de prática disponíveis: quiz precisa de 2+ cards com respostas
   // distintas (para haver alternativa errada); escrever, de 1+ card.
@@ -65,16 +64,7 @@ export function DeckCard({
       style={cardShadow}
       activeOpacity={0.8}
     >
-      <View
-        className="w-12 h-12 rounded-button items-center justify-center"
-        style={{
-          backgroundColor: deckColor + '24',
-          borderWidth: 1,
-          borderColor: deckColor + '55',
-        }}
-      >
-        <Text className="text-xl">{deck.emoji}</Text>
-      </View>
+      <DeckAvatar coverUrl={deck.coverUrl} size={48} radius={12} />
       <View className="flex-1">
         <Text
           className="text-on-surface font-jakarta-semibold text-base"

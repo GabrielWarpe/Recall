@@ -9,6 +9,7 @@ export interface NewDeckInput {
   title: string;
   emoji: string;
   color: string;
+  coverUrl?: string | null;
   sourceType: SourceType;
   tags?: string[];
   cards: { front: string; back: string }[];
@@ -51,6 +52,7 @@ export function useDecks() {
           title: input.title,
           emoji: input.emoji,
           color: input.color,
+          coverUrl: input.coverUrl,
           sourceType: input.sourceType,
           tags: input.tags,
         },

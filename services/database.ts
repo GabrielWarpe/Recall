@@ -36,6 +36,7 @@ function rowsToDeck(playlist: PlaylistRow, cards: FlashcardRow[]): Deck {
     description: '',
     color: playlist.color,
     emoji: playlist.emoji,
+    coverUrl: playlist.cover_url ?? null,
     tags: playlist.tags ?? [],
     cards: cards.map(rowToFlashcard),
     createdAt: playlist.created_at,
@@ -128,8 +129,12 @@ export const db = {
     async create(
       // `tags` opcional: quando omitido, a coluna nem entra no INSERT —
       // permite gravar mesmo num banco que ainda não rodou a migração.
-      data: Omit<PlaylistRow, 'id' | 'created_at' | 'last_studied_at' | 'tags'> & {
+      data: Omit<
+        PlaylistRow,
+        'id' | 'created_at' | 'last_studied_at' | 'tags' | 'cover_url'
+      > & {
         tags?: string[];
+        cover_url?: string | null;
       },
     ): Promise<PlaylistRow> {
       const { data: row, error } = await supabase
@@ -469,6 +474,7 @@ export const db = {
         color: string;
         sourceType: SourceType;
         tags?: string[];
+        coverUrl?: string | null;
       },
       cards: NewCardInput[],
     ): Promise<Deck> {
@@ -479,19 +485,20 @@ export const db = {
         color: meta.color,
         source_type: meta.sourceType,
       };
+      // Campos opcionais que podem faltar num banco sem a migração aplicada.
+      const optional = {
+        ...(meta.tags !== undefined ? { tags: meta.tags } : {}),
+        ...(meta.coverUrl !== undefined ? { cover_url: meta.coverUrl } : {}),
+      };
 
       let playlist;
       try {
-        playlist = await db.playlists.create({
-          ...base,
-          // Só entra no INSERT quando informado (tolera banco sem a coluna).
-          ...(meta.tags !== undefined ? { tags: meta.tags } : {}),
-        });
+        playlist = await db.playlists.create({ ...base, ...optional });
       } catch (e) {
-        // Banco ainda sem a coluna `tags` (migração não aplicada): repete o
-        // INSERT sem o campo em vez de quebrar a criação de decks inteira.
+        // Banco ainda sem `tags`/`cover_url`: repete o INSERT sem os opcionais
+        // em vez de quebrar a criação de decks inteira.
         const msg = (e as { message?: string } | null)?.message ?? '';
-        if (meta.tags !== undefined && /tags/i.test(msg)) {
+        if (Object.keys(optional).length > 0 && /tags|cover_url/i.test(msg)) {
           playlist = await db.playlists.create(base);
         } else {
           throw e;

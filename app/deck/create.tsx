@@ -23,8 +23,7 @@ import { uploadCardImages, type CardImage } from '@/services/images';
 import { errorMessage } from '@/utils/errors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDecks } from '@/hooks/useDecks';
-import { DECK_COLORS } from '@/constants/theme';
-import { EmojiPickerField } from '@/components/EmojiPickerField';
+import { DeckCoverPicker } from '@/components/DeckCoverPicker';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { cardShadow } from '@/components/ui/Card';
@@ -46,8 +45,7 @@ export default function CreateDeckScreen() {
   // Deck metadata
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedColor, setSelectedColor] = useState(DECK_COLORS[0]!);
-  const [selectedEmoji, setSelectedEmoji] = useState('📚');
+  const [cover, setCover] = useState<CardImage | null>(null);
   const [tags, setTags] = useState<string[]>([]);
 
   // Tags já usadas nos outros decks, como sugestão de 1 toque.
@@ -209,10 +207,16 @@ export default function CreateDeckScreen() {
         });
       }
 
+      // Sobe a capa (se houver) e guarda só a URL pública.
+      const coverUrl = cover
+        ? ((await uploadCardImages(user.id, [cover]))[0] ?? null)
+        : null;
+
       await createDeck({
         title: title.trim(),
-        emoji: selectedEmoji,
-        color: selectedColor,
+        emoji: '',
+        color: '',
+        coverUrl,
         sourceType: mode === 'ai' ? 'ai' : 'manual',
         tags,
         cards: payload,
@@ -276,34 +280,8 @@ export default function CreateDeckScreen() {
             />
           </View>
 
-          {/* Emoji picker */}
-          <View className="gap-2">
-            <Text className="text-on-surface-variant font-inter-medium text-sm">
-              Ícone
-            </Text>
-            <EmojiPickerField value={selectedEmoji} onChange={setSelectedEmoji} />
-          </View>
-
-          {/* Color picker */}
-          <View className="gap-2">
-            <Text className="text-on-surface-variant font-inter-medium text-sm">
-              Cor
-            </Text>
-            <View className="flex-row gap-3 flex-wrap">
-              {DECK_COLORS.map(c => (
-                <TouchableOpacity
-                  key={c}
-                  onPress={() => setSelectedColor(c)}
-                  className={`w-9 h-9 rounded-full border-2 ${
-                    selectedColor === c
-                      ? 'border-on-surface scale-110'
-                      : 'border-outline-variant/40'
-                  }`}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-            </View>
-          </View>
+          {/* Capa do deck */}
+          <DeckCoverPicker cover={cover} onChange={setCover} />
 
           {/* Tags */}
           <TagInput

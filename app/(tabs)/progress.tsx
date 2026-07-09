@@ -9,6 +9,7 @@ import type { StudySession } from '@/types';
 import { cardMaturity, type Maturity } from '@/services/ai';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
+import { DeckAvatar } from '@/components/DeckAvatar';
 import { Card, cardShadow } from '@/components/ui/Card';
 import { useStreak } from '@/hooks/useStreak';
 import { useDecks } from '@/hooks/useDecks';
@@ -124,7 +125,7 @@ export default function ProgressScreen() {
       const mastered = d.cards.filter(c => c.mastered).length;
       return {
         id: d.id,
-        emoji: d.emoji,
+        coverUrl: d.coverUrl,
         title: d.title,
         mastered,
         total: d.cards.length,
@@ -356,12 +357,15 @@ export default function ProgressScreen() {
                   onPress={() => router.push(`/deck/${m.id}`)}
                 >
                   <View className="flex-row items-center justify-between mb-1.5">
-                    <Text
-                      className="text-on-surface font-inter-medium text-sm flex-1 mr-3"
-                      numberOfLines={1}
-                    >
-                      {m.emoji} {m.title}
-                    </Text>
+                    <View className="flex-row items-center gap-2 flex-1 mr-3">
+                      <DeckAvatar coverUrl={m.coverUrl} size={22} radius={7} />
+                      <Text
+                        className="text-on-surface font-inter-medium text-sm flex-1"
+                        numberOfLines={1}
+                      >
+                        {m.title}
+                      </Text>
+                    </View>
                     <Text
                       className="font-jakarta-bold text-sm"
                       style={{ color: masteryColor(m.pct) }}
