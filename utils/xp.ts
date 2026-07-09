@@ -1,3 +1,5 @@
+import type { TierIconName } from '@/components/icons/tiers/paths';
+
 /**
  * Sistema de XP/nível derivado das sessões — sem coluna nova no banco.
  * 1 XP por card revisado. O custo para avançar do nível L para L+1 cresce
@@ -35,25 +37,41 @@ export function levelFromXp(xp: number): LevelInfo {
 
 /**
  * Patentes: dão um título aspiracional a cada faixa de nível ("Estudante",
- * "Mestre"...) em vez de só um número. Cada uma tem emoji e cor própria, e a
- * próxima patente serve de meta de médio prazo — é o que dá sensação de
- * progressão e "objetivo à vista".
+ * "Mestre"...) em vez de só um número, e a próxima serve de meta de médio
+ * prazo — é o que dá sensação de progressão e "objetivo à vista".
+ *
+ * A cor NÃO é um hex fixo: é uma chave da paleta (`tone`), resolvida pelo tema
+ * em tempo de render. Assim as patentes acompanham claro/escuro e a cor de
+ * destaque, em vez de carregarem cores de fora do sistema.
+ *
+ * A progressão é lida em dois eixos: o matiz esfria→esquenta (neutro → azul →
+ * teal → âmbar) e o `treatment` ganha peso (tinta → anel → preenchimento).
  */
+
+/** Chaves da paleta usadas pelas patentes. */
+export type TierTone = 'outline' | 'info' | 'primary' | 'tertiary';
+
+/** Peso visual do emblema, crescente. */
+export type TierTreatment = 'tint' | 'ring' | 'solid' | 'solid-ring';
+
 export interface LevelTier {
   minLevel: number;
   name: string;
-  emoji: string;
-  color: string;
+  icon: TierIconName;
+  tone: TierTone;
+  treatment: TierTreatment;
 }
 
+// `name` e `minLevel` são intocáveis: o id das conquistas de patente é
+// derivado do nome (`tier_${name.toLowerCase()}`) e já está persistido.
 export const LEVEL_TIERS: LevelTier[] = [
-  { minLevel: 1, name: 'Iniciante', emoji: '🌱', color: '#10b981' },
-  { minLevel: 2, name: 'Aprendiz', emoji: '📗', color: '#06b6d4' },
-  { minLevel: 4, name: 'Dedicado', emoji: '⚡', color: '#3b82f6' },
-  { minLevel: 7, name: 'Estudante', emoji: '🎓', color: '#8b5cf6' },
-  { minLevel: 10, name: 'Erudito', emoji: '📚', color: '#f59e0b' },
-  { minLevel: 15, name: 'Mestre', emoji: '🧠', color: '#f43f5e' },
-  { minLevel: 20, name: 'Lenda', emoji: '👑', color: '#eab308' },
+  { minLevel: 1, name: 'Iniciante', icon: 'sprout', tone: 'outline', treatment: 'tint' },
+  { minLevel: 2, name: 'Aprendiz', icon: 'open-book', tone: 'info', treatment: 'tint' },
+  { minLevel: 4, name: 'Dedicado', icon: 'flame', tone: 'primary', treatment: 'tint' },
+  { minLevel: 7, name: 'Estudante', icon: 'owl', tone: 'primary', treatment: 'ring' },
+  { minLevel: 10, name: 'Erudito', icon: 'quill', tone: 'tertiary', treatment: 'ring' },
+  { minLevel: 15, name: 'Mestre', icon: 'laurels', tone: 'tertiary', treatment: 'solid' },
+  { minLevel: 20, name: 'Lenda', icon: 'crown', tone: 'tertiary', treatment: 'solid-ring' },
 ];
 
 /** XP total acumulado necessário para ALCANÇAR um nível (nível 1 = 0 XP). */

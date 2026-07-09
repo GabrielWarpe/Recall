@@ -12,6 +12,7 @@ import {
   LEVEL_TIERS,
 } from '@/utils/xp';
 import { Card } from '@/components/ui/Card';
+import { TierBadge } from '@/components/TierBadge';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 /**
@@ -57,16 +58,16 @@ export default function LevelsScreen() {
         {/* Situação atual */}
         <Card className="p-5 mb-5">
           <View className="flex-row items-center">
-            <View
-              className="w-14 h-14 rounded-card items-center justify-center"
-              style={{ backgroundColor: tier.color + '26' }}
-            >
-              <Text style={{ fontSize: 26 }}>{tier.emoji}</Text>
-            </View>
+            <TierBadge
+              icon={tier.icon}
+              tone={tier.tone}
+              treatment={tier.treatment}
+              size={56}
+            />
             <View className="flex-1 ml-3">
               <Text
                 className="font-jakarta-extrabold text-lg"
-                style={{ color: tier.color }}
+                style={{ color: colors[tier.tone] }}
               >
                 {tier.name}
               </Text>
@@ -80,7 +81,7 @@ export default function LevelsScreen() {
               className="h-full rounded-pill"
               style={{
                 width: `${Math.max(Math.round(level.progress * 100), 3)}%`,
-                backgroundColor: tier.color,
+                backgroundColor: colors[tier.tone],
               }}
             />
           </View>
@@ -101,6 +102,7 @@ export default function LevelsScreen() {
             const reached = level.level >= t.minLevel;
             const isCurrent = tier.name === t.name;
             const missing = Math.max(0, neededXp - level.xp);
+            const tint = colors[t.tone];
 
             return (
               <View
@@ -109,32 +111,32 @@ export default function LevelsScreen() {
                 style={{
                   opacity: reached ? 1 : 0.65,
                   borderWidth: isCurrent ? 1.5 : 0,
-                  borderColor: isCurrent ? t.color : 'transparent',
+                  borderColor: isCurrent ? tint : 'transparent',
                 }}
               >
-                <View
-                  className="w-12 h-12 rounded-card items-center justify-center"
-                  style={{ backgroundColor: t.color + '26' }}
-                >
-                  <Text className="text-2xl">{t.emoji}</Text>
-                </View>
+                <TierBadge
+                  icon={t.icon}
+                  tone={t.tone}
+                  treatment={t.treatment}
+                  size={48}
+                />
 
                 <View className="flex-1">
                   <View className="flex-row items-center gap-2">
                     <Text
                       className="font-jakarta-bold text-base"
-                      style={{ color: reached ? t.color : colors.onSurface }}
+                      style={{ color: reached ? tint : colors.onSurface }}
                     >
                       {t.name}
                     </Text>
                     {isCurrent && (
                       <View
                         className="rounded-pill px-2 py-0.5"
-                        style={{ backgroundColor: t.color + '26' }}
+                        style={{ backgroundColor: tint + '26' }}
                       >
                         <Text
                           className="font-inter-semibold text-[10px]"
-                          style={{ color: t.color }}
+                          style={{ color: tint }}
                         >
                           VOCÊ ESTÁ AQUI
                         </Text>
@@ -151,7 +153,7 @@ export default function LevelsScreen() {
                 </View>
 
                 {reached ? (
-                  <Ionicons name="checkmark-circle" size={22} color={t.color} />
+                  <Ionicons name="checkmark-circle" size={22} color={tint} />
                 ) : (
                   <View className="items-end">
                     <Ionicons name="lock-closed" size={16} color={colors.outline} />

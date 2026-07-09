@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import { fireNotification } from './notifications';
 import { db } from './database';
 import { LEVEL_TIERS, type LevelTier, levelFromXp } from '@/utils/xp';
+import type { TierIconName } from '@/components/icons/tiers/paths';
 import type { Deck, StudySession } from '@/types';
 
 /**
@@ -239,16 +240,23 @@ export interface Achievement {
   title: string;
   body: string;
   earned: (s: AchievementStats) => boolean;
+  /**
+   * Só as conquistas de PATENTE têm ícone. As demais continuam trazendo o
+   * emoji no início do `title` — a galeria decide o que renderizar.
+   */
+  icon?: TierIconName;
 }
 
 /** Conquista de patente derivada de um tier — mantém nome/emoji em sincronia
  * com o card de Nível, então "virar Estudante" na tela é a mesma coisa aqui. */
 function tierAchievement(t: LevelTier): Achievement {
   return {
+    // Id derivado do NOME: não mudar nomes de patente sem migrar desbloqueios.
     id: `tier_${t.name.toLowerCase()}`,
-    title: `${t.emoji} ${t.name}`,
+    title: t.name,
     body: `Você alcançou a patente ${t.name} (Nível ${t.minLevel}).`,
     earned: s => s.level >= t.minLevel,
+    icon: t.icon,
   };
 }
 

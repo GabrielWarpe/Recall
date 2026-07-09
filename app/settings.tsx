@@ -111,7 +111,7 @@ export default function SettingsScreen() {
   const handleAbout = () => {
     Alert.alert(
       'Recall',
-      `Versão ${APP_VERSION}\n\nApp de flashcards com criação assistida por IA.\nFeito com Expo + Supabase.`,
+      `Versão ${APP_VERSION}\n\nApp de flashcards com criação assistida por IA.\nFeito com Expo + Supabase.\n\nÍcones das patentes: game-icons.net (CC BY 3.0).`,
     );
   };
 

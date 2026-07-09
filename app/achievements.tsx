@@ -4,10 +4,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ACHIEVEMENTS, getUnlocked } from '@/services/achievements';
+import { TierIcon } from '@/components/icons/tiers/TierIcon';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useAuth } from '@/contexts/AuthContext';
 
-/** Separa o emoji do começo do título ("🎉 Primeiro deck!" → 🎉 + texto). */
+/**
+ * Separa o emoji do começo do título ("🎉 Primeiro deck!" → 🎉 + texto).
+ * As conquistas de PATENTE não usam isto: elas trazem `icon` e o título limpo.
+ */
 function splitTitle(title: string): { emoji: string; label: string } {
   const spaceIdx = title.indexOf(' ');
   if (spaceIdx <= 0) return { emoji: '⭐', label: title };
@@ -76,7 +80,10 @@ export default function AchievementsScreen() {
         <View className="gap-3">
           {ACHIEVEMENTS.map(a => {
             const isUnlocked = unlocked.has(a.id);
-            const { emoji, label } = splitTitle(a.title);
+            // Patente: título já vem limpo e o glifo vem de `icon`.
+            const { emoji, label } = a.icon
+              ? { emoji: '', label: a.title }
+              : splitTitle(a.title);
             return (
               <View
                 key={a.id}
@@ -91,14 +98,16 @@ export default function AchievementsScreen() {
                       : colors.surfaceContainerHigh,
                   }}
                 >
-                  {isUnlocked ? (
-                    <Text className="text-2xl">{emoji}</Text>
-                  ) : (
+                  {!isUnlocked ? (
                     <Ionicons
                       name="lock-closed"
                       size={20}
                       color={colors.outline}
                     />
+                  ) : a.icon ? (
+                    <TierIcon name={a.icon} size={24} color={colors.primary} />
+                  ) : (
+                    <Text className="text-2xl">{emoji}</Text>
                   )}
                 </View>
                 <View className="flex-1">

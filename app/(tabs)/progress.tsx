@@ -10,6 +10,7 @@ import { cardMaturity, type Maturity } from '@/services/ai';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { DeckAvatar } from '@/components/DeckAvatar';
+import { TierBadge } from '@/components/TierBadge';
 import { Card, cardShadow } from '@/components/ui/Card';
 import { useStreak } from '@/hooks/useStreak';
 import { useDecks } from '@/hooks/useDecks';
@@ -166,17 +167,17 @@ export default function ProgressScreen() {
         <Card className="mx-5 mb-4 p-5">
           <View className="flex-row items-center">
             {/* Emblema da patente */}
-            <View
-              className="w-16 h-16 rounded-card items-center justify-center"
-              style={{ backgroundColor: tier.color + '26' }}
-            >
-              <Text style={{ fontSize: 30 }}>{tier.emoji}</Text>
-            </View>
+            <TierBadge
+              icon={tier.icon}
+              tone={tier.tone}
+              treatment={tier.treatment}
+              size={64}
+            />
 
             <View className="flex-1 ml-4">
               <Text
                 className="font-jakarta-extrabold text-xl"
-                style={{ color: tier.color }}
+                style={{ color: colors[tier.tone] }}
               >
                 {tier.name}
               </Text>
@@ -207,7 +208,7 @@ export default function ProgressScreen() {
               className="h-full rounded-pill"
               style={{
                 width: `${Math.max(Math.round(level.progress * 100), 3)}%`,
-                backgroundColor: tier.color,
+                backgroundColor: colors[tier.tone],
               }}
             />
           </View>
@@ -218,10 +219,20 @@ export default function ProgressScreen() {
               +{xpToNextLevel} XP para o Nível {level.level + 1}
             </Text>
             {upcomingTier != null && (
-              <Text className="text-outline font-inter-regular text-xs">
-                {nextLevelUnlocksTier ? 'Desbloqueia' : 'Próxima'}: {upcomingTier.emoji}{' '}
-                {upcomingTier.name}
-              </Text>
+              <View className="flex-row items-center gap-1.5">
+                <Text className="text-outline font-inter-regular text-xs">
+                  {nextLevelUnlocksTier ? 'Desbloqueia' : 'Próxima'}:
+                </Text>
+                <TierBadge
+                  icon={upcomingTier.icon}
+                  tone={upcomingTier.tone}
+                  treatment={upcomingTier.treatment}
+                  size={18}
+                />
+                <Text className="text-outline font-inter-regular text-xs">
+                  {upcomingTier.name}
+                </Text>
+              </View>
             )}
           </View>
         </Card>
