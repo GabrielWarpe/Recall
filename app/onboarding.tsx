@@ -7,7 +7,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  interpolate,
   runOnJS,
   Easing,
 } from 'react-native-reanimated';
@@ -197,8 +196,12 @@ export default function OnboardingScreen() {
   const CARD_WIDTH = width - 48;
   const CARD_HEIGHT = CARD_WIDTH * 1.35;
 
-  // `index` = slide visível na frente; durante a virada, `pending` é o slide
-  // que está impresso no verso e assume ao fim da animação.
+  // `index` = passo visível; durante a virada, `pending` é o passo de destino.
+  // A rotação é CONTÍNUA (0 → 1 → 2… meia-volta por passo) e nunca é resetada:
+  // resetar exigia trocar o conteúdo da frente no mesmo instante, e qualquer
+  // atraso do React fazia o card antigo piscar. Aqui as duas faces alternam
+  // (passos pares numa, ímpares na outra) e só a face ESCONDIDA muda de
+  // conteúdo — a visível nunca é tocada, então não há flash.
   const [index, setIndex] = useState(0);
   const [pending, setPending] = useState<number | null>(null);
   const progress = useSharedValue(0);
@@ -206,32 +209,39 @@ export default function OnboardingScreen() {
   const shown = pending ?? index;
   const isLast = shown === SLIDES.length - 1;
 
+  const lastIdx = SLIDES.length - 1;
+  const nextIdx = Math.min(index + 1, lastIdx);
+  // Face A mostra os passos pares; face B, os ímpares. A que não está com o
+  // passo atual carrega o próximo (fica pré-impressa no "verso").
+  const slideA = index % 2 === 0 ? SLIDES[index] : SLIDES[nextIdx];
+  const slideB = index % 2 === 1 ? SLIDES[index] : SLIDES[nextIdx];
+
   const finish = () => {
     complete();
     router.replace('/(tabs)');
   };
 
   // Mesma virada 3D do FlashCard do modo estudo.
-  const frontStyle = useAnimatedStyle(() => ({
+  const faceAStyle = useAnimatedStyle(() => ({
     transform: [
       { perspective: 1200 },
-      { rotateY: `${interpolate(progress.value, [0, 1], [0, 180])}deg` },
+      { rotateY: `${progress.value * 180}deg` },
     ],
     backfaceVisibility: 'hidden',
   }));
-  const backStyle = useAnimatedStyle(() => ({
+  const faceBStyle = useAnimatedStyle(() => ({
     transform: [
       { perspective: 1200 },
-      { rotateY: `${interpolate(progress.value, [0, 1], [180, 360])}deg` },
+      { rotateY: `${180 + progress.value * 180}deg` },
     ],
     backfaceVisibility: 'hidden',
   }));
 
-  // Ao terminar a virada, o verso vira a nova frente e o card "desarma".
+  // Ao terminar a virada, o estado assume o novo passo. A face visível já
+  // mostra esse conteúdo (nada muda nela); só o verso escondido recarrega.
   const commitFlip = (target: number) => {
     setIndex(target);
     setPending(null);
-    progress.value = 0;
   };
 
   const next = () => {
@@ -242,12 +252,13 @@ export default function OnboardingScreen() {
     if (pending !== null) return; // ignora toques durante a virada
     const target = index + 1;
     if (settings.reduceMotion) {
+      progress.value = target;
       setIndex(target);
       return;
     }
     setPending(target);
     progress.value = withTiming(
-      1,
+      target,
       { duration: 550, easing: Easing.out(Easing.cubic) },
       finished => {
         if (finished) runOnJS(commitFlip)(target);
@@ -274,28 +285,28 @@ export default function OnboardingScreen() {
       {/* Card com virada 3D entre os passos */}
       <View className="flex-1 items-center justify-center">
         <View style={{ width: CARD_WIDTH, height: CARD_HEIGHT }}>
-          {/* Frente: passo atual */}
+          {/* Face A: passos pares (0, 2, …) */}
           <Animated.View
             style={[
-              frontStyle,
+              faceAStyle,
               cardShadow,
               { position: 'absolute', width: '100%', height: '100%' },
             ]}
             className="bg-surface-container rounded-card border border-outline-variant/20"
           >
-            <SlideFace slide={SLIDES[index]} />
+            <SlideFace slide={slideA} />
           </Animated.View>
 
-          {/* Verso: próximo passo (pré-girado 180°, aparece durante a virada) */}
+          {/* Face B: passos ímpares (1, 3, …) — pré-girada meia-volta à frente */}
           <Animated.View
             style={[
-              backStyle,
+              faceBStyle,
               cardShadow,
               { position: 'absolute', width: '100%', height: '100%' },
             ]}
             className="bg-surface-container rounded-card border border-outline-variant/20"
           >
-            <SlideFace slide={SLIDES[pending ?? Math.min(index + 1, SLIDES.length - 1)]} />
+            <SlideFace slide={slideB} />
           </Animated.View>
         </View>
       </View>
