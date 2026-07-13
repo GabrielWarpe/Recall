@@ -11,6 +11,7 @@ import {
   checkAchievements,
   buildAchievementStats,
 } from '@/services/achievements';
+import { useActiveTimer } from '@/hooks/useActiveTimer';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 
@@ -32,6 +33,11 @@ export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
   const [hardCount, setHardCount] = useState(0);
   const [againCount, setAgainCount] = useState(0);
   const startTimeRef = useRef<number>(0);
+  // Tempo REAL de resolução (pausa em segundo plano). É o que vai para
+  // `active_seconds` — o intervalo started_at→ended_at contaria o app
+  // minimizado como se fosse estudo.
+  const timer = useActiveTimer();
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const start = useCallback(
     (studyCards: Flashcard[]) => {
@@ -49,13 +55,20 @@ export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
       setAgainCount(0);
       setPhase('studying');
       startTimeRef.current = Date.now();
+      setElapsedSeconds(0);
+      timer.start();
     },
-    [settings.shuffle],
+    [settings.shuffle, timer],
   );
 
   // Encerra a sessão gravando o registro (só se algum card foi concluído).
   const finalize = useCallback(
     (reviewed: number, correct: number, hard: number, again: number) => {
+      // Para o cronômetro antes de qualquer await: o tempo é o da resolução,
+      // não o da gravação.
+      const activeSeconds = timer.stop();
+      setElapsedSeconds(activeSeconds);
+
       if (deck && user && reviewed > 0) {
         const startedAt = new Date(startTimeRef.current).toISOString();
         void (async () => {
@@ -69,6 +82,7 @@ export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
             hard_count: hard,
             again_count: again,
             mode,
+            active_seconds: activeSeconds,
           });
           await db.decks.touchStudied(deck.id);
 
@@ -136,6 +150,7 @@ export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
       deck,
       user,
       mode,
+      timer,
       refreshProfile,
       settings.streakAlert,
       settings.studyReminder,
@@ -198,6 +213,7 @@ export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
     setCorrectCount(0);
     setHardCount(0);
     setAgainCount(0);
+    setElapsedSeconds(0);
   }, []);
 
   const currentCard = phase === 'studying' ? (queue[0] ?? null) : null;
@@ -210,6 +226,10 @@ export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
     correctCount,
     hardCount,
     againCount,
+    /** Tempo final da sessão (só preenchido depois de terminar). */
+    elapsedSeconds,
+    /** Lê o tempo corrente sem re-renderizar — para o relógio da tela. */
+    getElapsed: timer.getElapsed,
     start,
     grade,
     skip,

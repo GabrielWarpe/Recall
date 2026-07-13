@@ -9,8 +9,10 @@ import { getSessionCards } from '@/services/ai';
 import { useStudySession } from '@/hooks/useStudySession';
 import { deckSupportsQuiz, cardSupportsQuiz } from '@/utils/practice';
 import { QuizQuestion } from '@/components/QuizQuestion';
+import { QuizTimer } from '@/components/QuizTimer';
 import { Button } from '@/components/ui/Button';
 import { cardShadow } from '@/components/ui/Card';
+import { formatClock } from '@/utils/stats';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 export default function QuizScreen() {
@@ -163,6 +165,18 @@ export default function QuizScreen() {
           <Text className="text-outline font-inter-regular text-base text-center mt-2">
             {deck.title}
           </Text>
+
+          {/* Tempo total de resolução (só o tempo com o app aberto). */}
+          <View className="flex-row items-center gap-1.5 mt-3">
+            <Ionicons name="time-outline" size={15} color={colors.outline} />
+            <Text
+              className="text-outline font-inter-medium text-sm"
+              style={{ fontVariant: ['tabular-nums'] }}
+            >
+              {formatClock(session.elapsedSeconds)}
+            </Text>
+          </View>
+
           <Text className="text-on-surface-variant font-inter-medium text-sm text-center mt-3">
             {message}
           </Text>
@@ -256,10 +270,14 @@ export default function QuizScreen() {
             {deck.title}
           </Text>
         </View>
-        <View className="w-10 items-end">
+        <View className="items-end gap-0.5">
           <Text className="text-outline font-inter-regular text-xs">
             {position}/{session.total}
           </Text>
+          <QuizTimer
+            getElapsed={session.getElapsed}
+            running={session.phase === 'studying'}
+          />
         </View>
       </View>
 

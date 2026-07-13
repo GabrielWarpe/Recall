@@ -12,6 +12,7 @@ import * as Haptics from 'expo-haptics';
 import type { Flashcard } from '@/types';
 import { useSettings } from '@/contexts/SettingsContext';
 import { buildOptions } from '@/utils/practice';
+import { STRUCK_OPACITY } from '@/constants/study';
 import { Button } from '@/components/ui/Button';
 import { cardShadow } from '@/components/ui/Card';
 import { useThemeColors } from '@/hooks/useThemeColors';
@@ -57,6 +58,13 @@ export function QuizQuestion({
   const [answer, setAnswer] = useState<{ key: string; index: number } | null>(
     null,
   );
+  // Alternativas eliminadas pelo usuário — apoio VISUAL apenas: riscar não
+  // bloqueia responder e não entra em nenhum cálculo de acerto. Amarrado ao
+  // questionKey (como `answer`), então some sozinho ao trocar de pergunta.
+  const [struck, setStruck] = useState<{ key: string; indexes: number[] }>({
+    key: '',
+    indexes: [],
+  });
   // Momento do último avanço: ignora toques "atravessados" logo em seguida
   // (toque duplo no Próxima cairia sobre uma alternativa da pergunta nova).
   const advancedAtRef = useRef(0);
@@ -74,6 +82,21 @@ export function QuizQuestion({
   const answered = selectedIndex !== null;
   const answeredCorrectly =
     answered && (options[selectedIndex]?.isCorrect ?? false);
+
+  // Idem para os riscos: os de perguntas anteriores não valem.
+  const struckIndexes = struck.key === questionKey ? struck.indexes : [];
+
+  const toggleStrike = (index: number) => {
+    setStruck(prev => {
+      const current = prev.key === questionKey ? prev.indexes : [];
+      return {
+        key: questionKey,
+        indexes: current.includes(index)
+          ? current.filter(i => i !== index)
+          : [...current, index],
+      };
+    });
+  };
 
   const handleSelect = (index: number) => {
     if (answered) return;
@@ -146,17 +169,15 @@ export function QuizQuestion({
           const showCorrect = answered && opt.isCorrect;
           const showWrong = answered && isSelected && !opt.isCorrect;
           const dimmed = answered && !isSelected && !opt.isCorrect;
+          const isStruck = struckIndexes.includes(i);
 
           return (
-            // key com a identidade da PERGUNTA: cada questão monta opções
-            // novas — o TouchableOpacity anima a própria opacidade e, se
-            // reutilizado entre perguntas, deixa o valor antigo "grudado".
-            <TouchableOpacity
+            // A alternativa e o botão de riscar são IRMÃOS, não aninhados: um
+            // toque em "riscar" dentro do Touchable da opção acabaria
+            // respondendo a questão.
+            <View
               key={`${questionKey}:${i}`}
-              onPress={() => handleSelect(i)}
-              disabled={answered}
-              activeOpacity={0.8}
-              className={`rounded-card px-4 py-4 border ${
+              className={`flex-row items-center rounded-card border ${
                 showCorrect
                   ? 'bg-success/15 border-success'
                   : showWrong
@@ -164,34 +185,67 @@ export function QuizQuestion({
                     : 'bg-surface-container border-outline-variant'
               }`}
             >
-              {/* Esmaecimento na View interna, fora da animação do Touchable */}
-              <View
-                className="flex-row items-center gap-3"
-                style={{ opacity: dimmed ? 0.45 : 1 }}
+              <TouchableOpacity
+                onPress={() => handleSelect(i)}
+                disabled={answered}
+                activeOpacity={0.8}
+                className="flex-1 flex-row items-center gap-3 pl-4 py-4"
               >
-                <Text
-                  className={`flex-1 font-inter-medium text-base leading-6 ${
-                    showCorrect
-                      ? 'text-success'
-                      : showWrong
-                        ? 'text-error'
-                        : 'text-on-surface'
-                  }`}
+                {/* Esmaecimento na View interna, fora da animação do Touchable */}
+                <View
+                  className="flex-1 flex-row items-center gap-3"
+                  style={{
+                    opacity: dimmed || (isStruck && !answered) ? STRUCK_OPACITY : 1,
+                  }}
                 >
-                  {opt.text}
-                </Text>
-                {showCorrect && (
+                  <Text
+                    className={`flex-1 font-inter-medium text-base leading-6 ${
+                      showCorrect
+                        ? 'text-success'
+                        : showWrong
+                          ? 'text-error'
+                          : 'text-on-surface'
+                    }`}
+                    style={
+                      isStruck ? { textDecorationLine: 'line-through' } : undefined
+                    }
+                  >
+                    {opt.text}
+                  </Text>
+                  {showCorrect && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={22}
+                      color={colors.success}
+                    />
+                  )}
+                  {showWrong && (
+                    <Ionicons name="close-circle" size={22} color={colors.error} />
+                  )}
+                </View>
+              </TouchableOpacity>
+
+              {/* Eliminar: só antes de responder — depois quem manda é o
+                  feedback certo/errado. */}
+              {!answered && (
+                <TouchableOpacity
+                  onPress={() => toggleStrike(i)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 12, bottom: 12, left: 8, right: 12 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    isStruck ? 'Desfazer eliminação' : 'Eliminar alternativa'
+                  }
+                  className="px-4 py-4"
+                >
                   <Ionicons
-                    name="checkmark-circle"
-                    size={22}
-                    color={colors.success}
+                    name={isStruck ? 'remove-circle' : 'remove-circle-outline'}
+                    size={20}
+                    color={isStruck ? colors.onSurfaceVariant : colors.outline}
                   />
-                )}
-                {showWrong && (
-                  <Ionicons name="close-circle" size={22} color={colors.error} />
-                )}
-              </View>
-            </TouchableOpacity>
+                </TouchableOpacity>
+              )}
+            </View>
           );
         })}
       </View>

@@ -90,17 +90,21 @@ function rowToSession(
   row: StudySessionRow,
   deckTitle: string,
 ): StudySession {
+  // `active_seconds` é o tempo de tela ativa (não infla com o app minimizado).
+  // Sessões antigas não o têm: aí a duração vem do intervalo, como antes.
   const duration =
-    row.ended_at != null
-      ? Math.max(
-          0,
-          Math.round(
-            (new Date(row.ended_at).getTime() -
-              new Date(row.started_at).getTime()) /
-              1000,
-          ),
-        )
-      : 0;
+    row.active_seconds != null
+      ? Math.max(0, row.active_seconds)
+      : row.ended_at != null
+        ? Math.max(
+            0,
+            Math.round(
+              (new Date(row.ended_at).getTime() -
+                new Date(row.started_at).getTime()) /
+                1000,
+            ),
+          )
+        : 0;
   return {
     id: row.id,
     deckId: row.playlist_id ?? '',
@@ -254,16 +258,26 @@ export const db = {
         .select()
         .single();
       if (error) {
-        // Banco sem a coluna `mode` (migração pendente): grava sem ela em vez
+        // Banco sem as colunas novas (migração pendente): grava sem elas em vez
         // de perder a sessão. Mesmo padrão tolerante de tags/cover_url.
-        if (/mode/i.test(error.message ?? '') && data.mode !== undefined) {
-          const { mode: _mode, ...withoutMode } = data;
+        const msg = error.message ?? '';
+        const retry = { ...data };
+        let dropped = '';
+        if (/\bmode\b/i.test(msg) && retry.mode !== undefined) {
+          delete retry.mode;
+          dropped = '`mode`';
+        }
+        if (/active_seconds/i.test(msg) && retry.active_seconds !== undefined) {
+          delete retry.active_seconds;
+          dropped = dropped ? `${dropped} e \`active_seconds\`` : '`active_seconds`';
+        }
+        if (dropped) {
           if (__DEV__) {
             console.warn(
-              '[Recall] Sessão gravada SEM modo: rode a migração da coluna `mode`.',
+              `[Recall] Sessão gravada SEM ${dropped}: rode a migração dessas colunas.`,
             );
           }
-          return db.sessions.create(withoutMode);
+          return db.sessions.create(retry);
         }
         throw error;
       }

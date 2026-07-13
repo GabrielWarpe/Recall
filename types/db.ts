@@ -70,6 +70,11 @@ export interface StudySessionRow {
   again_count: number;
   /** 'flash' | 'quiz' | 'write'; null em sessões antigas (contam como flash). */
   mode?: string | null;
+  /**
+   * Tempo REAL de tela ativa, em segundos (não conta segundo plano). Null em
+   * sessões antigas — nelas a duração segue vindo de ended_at - started_at.
+   */
+  active_seconds?: number | null;
 }
 
 export interface CardReviewRow {
