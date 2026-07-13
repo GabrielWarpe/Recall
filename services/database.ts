@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { supabase } from './supabase';
+import { sanitizeInterval } from './ai';
 import { computeStreak, computeLongestStreak } from '@/utils/streak';
 import type {
   Profile,
@@ -19,7 +20,10 @@ function rowToFlashcard(row: FlashcardRow): Flashcard {
     front: row.front,
     back: row.back,
     createdAt: row.created_at,
-    interval: row.interval,
+    // Cards revisados antes do teto de intervalo existir podem ter valores
+    // absurdos gravados (o intervalo era multiplicado sem limite). Saneia na
+    // leitura: a próxima revisão já grava um valor válido.
+    interval: sanitizeInterval(row.interval),
     repetitions: row.repetitions,
     easeFactor: row.ease_factor,
     nextReview: row.next_review_date,

@@ -16,11 +16,16 @@ import * as Haptics from 'expo-haptics';
 import type { Deck, Flashcard } from '@/types';
 import { db } from '@/services/database';
 import { useStudySession } from '@/hooks/useStudySession';
+import { useTimedSession } from '@/hooks/useTimedSession';
 import { useSettings } from '@/contexts/SettingsContext';
 import { checkAnswer, type AnswerVerdict } from '@/utils/answer';
 import { Button } from '@/components/ui/Button';
 import { CardImages } from '@/components/CardImages';
+import { SessionTimer } from '@/components/SessionTimer';
+import { StudySetup } from '@/components/StudySetup';
+import { TimeUpNotice } from '@/components/TimeUpNotice';
 import { cardShadow } from '@/components/ui/Card';
+import { formatClock } from '@/utils/stats';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 function shuffle<T>(arr: T[]): T[] {
@@ -41,9 +46,10 @@ export default function WriteScreen() {
   const colors = useThemeColors();
   const { settings } = useSettings();
   const [deck, setDeck] = useState<Deck | null>(null);
-  const [sessionStarted, setSessionStarted] = useState(false);
 
   const session = useStudySession(deck, 'write');
+  // Cronômetro + tela de início: mesma lógica de todos os modos.
+  const timed = useTimedSession(session);
 
   const [draft, setDraft] = useState('');
   const [result, setResult] = useState<WriteResult | null>(null);
@@ -58,12 +64,12 @@ export default function WriteScreen() {
     });
   }, [deckId]);
 
-  // Modo prática: deck inteiro, sempre embaralhado.
+  // Modo prática: deck inteiro, sempre embaralhado. Os cards ficam PENDENTES —
+  // quem inicia é a tela de início.
   useEffect(() => {
-    if (!deck || sessionStarted || deck.cards.length === 0) return;
-    session.start(shuffle(deck.cards));
-    setSessionStarted(true);
-  }, [deck, sessionStarted]);
+    if (!deck || timed.started || timed.pending || deck.cards.length === 0) return;
+    timed.prepare(shuffle(deck.cards));
+  }, [deck, timed.started, timed.pending, timed.prepare]);
 
   const currentCard: Flashcard | null = session.currentCard;
   const questionKey = currentCard
@@ -156,17 +162,34 @@ export default function WriteScreen() {
   };
 
   const restart = () => {
-    setSessionStarted(false);
     setResult(null);
     setDraft('');
     missedIdsRef.current = new Set();
     advancedAtRef.current = 0;
     gradedKeyRef.current = '';
-    session.reset();
+    timed.resetTimed();
     void db.decks.getOne(deck.id).then(d => {
       if (d) setDeck(d);
     });
   };
+
+  // ── Tela de início (config do cronômetro desta sessão) ────────────────────
+  if (timed.showSetup && session.phase !== 'finished') {
+    return (
+      <SafeAreaView className="flex-1 bg-background">
+        <StudySetup
+          modeLabel="Escrever"
+          modeIcon="create"
+          deckTitle={deck.title}
+          cardCount={timed.pending?.length ?? 0}
+          config={timed.config}
+          onChange={timed.setConfig}
+          onStart={timed.begin}
+          onCancel={() => router.back()}
+        />
+      </SafeAreaView>
+    );
+  }
 
   // ── Resultado final ──────────────────────────────────────────────────────
   if (session.phase === 'finished') {
@@ -205,6 +228,21 @@ export default function WriteScreen() {
           <Text className="text-outline font-inter-regular text-base text-center mt-2">
             {deck.title}
           </Text>
+
+          {/* Tempo total (só com o app aberto). Aparece mesmo com o relógio
+              OCULTO — o que ele esconde é o durante, não o resultado. */}
+          {timed.config.enabled && (
+            <View className="flex-row items-center gap-1.5 mt-3">
+              <Ionicons name="time-outline" size={15} color={colors.outline} />
+              <Text
+                className="text-outline font-inter-medium text-sm"
+                style={{ fontVariant: ['tabular-nums'] }}
+              >
+                {formatClock(session.elapsedSeconds)}
+              </Text>
+            </View>
+          )}
+
           <Text className="text-on-surface-variant font-inter-medium text-sm text-center mt-3">
             {message}
           </Text>
@@ -284,10 +322,20 @@ export default function WriteScreen() {
               {deck.title}
             </Text>
           </View>
-          <View className="w-10 items-end">
+          <View className="items-end gap-0.5">
             <Text className="text-outline font-inter-regular text-xs">
               {position}/{session.total}
             </Text>
+            {/* Cronômetro desligado ou oculto → sem mostrador. Oculto, o tempo
+                continua correndo e sendo gravado (a medição vive na sessão). */}
+            {timed.showClock && (
+              <SessionTimer
+                getDisplay={timed.getDisplay}
+                running={session.phase === 'studying'}
+                phase={timed.phase}
+                countdown={timed.isCountdown}
+              />
+            )}
           </View>
         </View>
 
@@ -308,6 +356,10 @@ export default function WriteScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            {/* Tempo esgotado: este card ainda vale; a sessão encerra depois
+                de respondê-lo ou pulá-lo. */}
+            {timed.expired && <TimeUpNotice />}
+
             {/* Pergunta */}
             <View className="bg-surface-container rounded-card p-6" style={cardShadow}>
               <Text className="text-outline font-inter-semibold text-xs tracking-widest mb-2">

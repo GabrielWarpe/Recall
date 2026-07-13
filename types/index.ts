@@ -37,6 +37,27 @@ export interface Deck {
 /** Modo de estudo de uma sessão. Sessões antigas (sem coluna) contam como 'flash'. */
 export type StudyMode = 'flash' | 'quiz' | 'write';
 
+/** Cronômetro: crescente (tempo decorrido) ou regressivo (limite). */
+export type StudyTimerMode = 'up' | 'down';
+
+/**
+ * A que o cronômetro se aplica. Hoje a sessão inteira; `'card'` (limite por
+ * card/questão) entra aqui depois — `useStudyTimer` já ramifica por este
+ * campo, então adicionar o modo novo não exige refazer a configuração.
+ */
+export type StudyTimerScope = 'session';
+
+/** Configuração do cronômetro de UMA sessão de estudo (qualquer modo). */
+export interface StudyTimerConfig {
+  enabled: boolean;
+  mode: StudyTimerMode;
+  /** Só usado no modo regressivo. */
+  limitSeconds: number;
+  /** Mostrar o relógio na tela. Oculto, o tempo continua sendo medido. */
+  visible: boolean;
+  scope: StudyTimerScope;
+}
+
 export interface StudySession {
   id: string;
   deckId: string;

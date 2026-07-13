@@ -13,6 +13,7 @@ import type { Flashcard } from '@/types';
 import { useSettings } from '@/contexts/SettingsContext';
 import { buildOptions } from '@/utils/practice';
 import { STRUCK_OPACITY } from '@/constants/study';
+import { TimeUpNotice } from '@/components/TimeUpNotice';
 import { Button } from '@/components/ui/Button';
 import { cardShadow } from '@/components/ui/Card';
 import { useThemeColors } from '@/hooks/useThemeColors';
@@ -31,6 +32,8 @@ interface QuizQuestionProps {
   questionKey: string;
   /** true quando acertar esta pergunta encerra a sessão ("Ver resultado"). */
   isLastIfCorrect: boolean;
+  /** Aviso destacado acima da pergunta (ex.: "Tempo esgotado"). */
+  notice?: string;
   /** Disparado ao confirmar em "Próxima" — o pai converte em grade SM-2. */
   onAnswer: (correct: boolean) => void;
   onSkip: () => void;
@@ -45,6 +48,7 @@ export function QuizQuestion({
   card,
   questionKey,
   isLastIfCorrect,
+  notice,
   onAnswer,
   onSkip,
 }: QuizQuestionProps) {
@@ -136,6 +140,10 @@ export function QuizQuestion({
       contentContainerStyle={{ padding: 24, gap: 16 }}
       showsVerticalScrollIndicator={false}
     >
+      {/* Aviso (ex.: tempo esgotado). Não bloqueia nada — a questão em tela
+          ainda pode ser respondida ou pulada. */}
+      {notice != null && <TimeUpNotice message={notice} />}
+
       {/* Imagem-destaque (só a primeira, se o card tiver imagens) */}
       {card.images.length > 0 && (
         <Image

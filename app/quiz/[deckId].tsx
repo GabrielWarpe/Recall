@@ -7,9 +7,12 @@ import type { Deck } from '@/types';
 import { db } from '@/services/database';
 import { getSessionCards } from '@/services/ai';
 import { useStudySession } from '@/hooks/useStudySession';
+import { useTimedSession } from '@/hooks/useTimedSession';
 import { deckSupportsQuiz, cardSupportsQuiz } from '@/utils/practice';
 import { QuizQuestion } from '@/components/QuizQuestion';
-import { QuizTimer } from '@/components/QuizTimer';
+import { SessionTimer } from '@/components/SessionTimer';
+import { StudySetup } from '@/components/StudySetup';
+import { TIME_UP_MESSAGE } from '@/components/TimeUpNotice';
 import { Button } from '@/components/ui/Button';
 import { cardShadow } from '@/components/ui/Card';
 import { formatClock } from '@/utils/stats';
@@ -20,10 +23,11 @@ export default function QuizScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const [deck, setDeck] = useState<Deck | null>(null);
-  const [sessionStarted, setSessionStarted] = useState(false);
   const [noDue, setNoDue] = useState(false);
 
   const session = useStudySession(deck, 'quiz');
+  // Cronômetro + tela de início: mesma lógica de todos os modos.
+  const timed = useTimedSession(session);
 
   // Cards já errados nesta sessão: ao acertar na repetição, valem "Difícil".
   const missedIdsRef = useRef<Set<string>>(new Set());
@@ -38,29 +42,25 @@ export default function QuizScreen() {
   // Mesma seleção do estudo (devidos + novos), restrita aos cards que TÊM
   // alternativas autoradas — só eles são perguntas de quiz. O quiz também
   // conta para o agendamento SM-2. Sem nada devido → "Tudo em dia".
+  // Os cards ficam PENDENTES: quem inicia é a tela de início.
   useEffect(() => {
-    if (!deck || sessionStarted || noDue || !deckSupportsQuiz(deck)) return;
+    if (!deck || timed.started || noDue || timed.pending || !deckSupportsQuiz(deck))
+      return;
     const cards = getSessionCards(deck).filter(cardSupportsQuiz);
-    if (cards.length > 0) {
-      session.start(cards);
-      setSessionStarted(true);
-    } else {
-      setNoDue(true);
-    }
-  }, [deck, sessionStarted, noDue]);
+    if (cards.length > 0) timed.prepare(cards);
+    else setNoDue(true);
+  }, [deck, noDue, timed.started, timed.pending, timed.prepare]);
 
   const practiceAll = () => {
     if (!deck) return;
     setNoDue(false);
-    session.start(deck.cards.filter(cardSupportsQuiz));
-    setSessionStarted(true);
+    timed.prepare(deck.cards.filter(cardSupportsQuiz));
   };
 
   const restart = () => {
-    setSessionStarted(false);
     setNoDue(false);
     missedIdsRef.current = new Set();
-    session.reset();
+    timed.resetTimed();
     if (deck) {
       void db.decks.getOne(deck.id).then(d => {
         if (d) setDeck(d);
@@ -128,6 +128,25 @@ export default function QuizScreen() {
     );
   }
 
+  // ── Tela de início (config do cronômetro desta sessão) ────────────────────
+  if (timed.showSetup && session.phase !== 'finished') {
+    return (
+      <SafeAreaView className="flex-1 bg-background">
+        <StudySetup
+          modeLabel="Quiz"
+          modeIcon="help-circle"
+          deckTitle={deck.title}
+          cardCount={timed.pending?.length ?? 0}
+          itemNoun={['questão', 'questões']}
+          config={timed.config}
+          onChange={timed.setConfig}
+          onStart={timed.begin}
+          onCancel={() => router.back()}
+        />
+      </SafeAreaView>
+    );
+  }
+
   // ── Resultado ────────────────────────────────────────────────────────────
   if (session.phase === 'finished') {
     const reviewed = session.correctCount + session.hardCount;
@@ -166,16 +185,21 @@ export default function QuizScreen() {
             {deck.title}
           </Text>
 
-          {/* Tempo total de resolução (só o tempo com o app aberto). */}
-          <View className="flex-row items-center gap-1.5 mt-3">
-            <Ionicons name="time-outline" size={15} color={colors.outline} />
-            <Text
-              className="text-outline font-inter-medium text-sm"
-              style={{ fontVariant: ['tabular-nums'] }}
-            >
-              {formatClock(session.elapsedSeconds)}
-            </Text>
-          </View>
+          {/* Tempo total de resolução (só o tempo com o app aberto). Aparece
+              mesmo com o relógio OCULTO — o que ele esconde é o durante, não o
+              resultado. Com o cronômetro desligado, some. O tempo é gravado no
+              banco de qualquer forma, para as estatísticas. */}
+          {timed.config.enabled && (
+            <View className="flex-row items-center gap-1.5 mt-3">
+              <Ionicons name="time-outline" size={15} color={colors.outline} />
+              <Text
+                className="text-outline font-inter-medium text-sm"
+                style={{ fontVariant: ['tabular-nums'] }}
+              >
+                {formatClock(session.elapsedSeconds)}
+              </Text>
+            </View>
+          )}
 
           <Text className="text-on-surface-variant font-inter-medium text-sm text-center mt-3">
             {message}
@@ -274,10 +298,16 @@ export default function QuizScreen() {
           <Text className="text-outline font-inter-regular text-xs">
             {position}/{session.total}
           </Text>
-          <QuizTimer
-            getElapsed={session.getElapsed}
-            running={session.phase === 'studying'}
-          />
+          {/* Cronômetro desligado ou oculto → sem mostrador. Oculto, o tempo
+              continua correndo e sendo gravado (a medição vive na sessão). */}
+          {timed.showClock && (
+            <SessionTimer
+              getDisplay={timed.getDisplay}
+              running={session.phase === 'studying'}
+              phase={timed.phase}
+              countdown={timed.isCountdown}
+            />
+          )}
         </View>
       </View>
 
@@ -297,7 +327,12 @@ export default function QuizScreen() {
         <QuizQuestion
           card={currentCard}
           questionKey={questionKey}
-          isLastIfCorrect={isLastIfCorrect}
+          isLastIfCorrect={isLastIfCorrect || timed.expired}
+          notice={
+            timed.expired
+              ? 'Tempo esgotado — conclua esta questão para ver o resultado.'
+              : undefined
+          }
           onAnswer={handleAnswer}
           onSkip={() => session.skip()}
         />

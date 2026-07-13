@@ -38,6 +38,10 @@ export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
   // minimizado como se fosse estudo.
   const timer = useActiveTimer();
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  // Encerrar assim que o card em tela for resolvido (tempo esgotado no quiz).
+  // É um ref, não estado: quem decide é o `grade`/`skip` do MESMO tique, com os
+  // contadores já calculados — ler um estado aqui pegaria o valor anterior.
+  const endAfterCurrentRef = useRef(false);
 
   const start = useCallback(
     (studyCards: Flashcard[]) => {
@@ -56,10 +60,20 @@ export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
       setPhase('studying');
       startTimeRef.current = Date.now();
       setElapsedSeconds(0);
+      endAfterCurrentRef.current = false;
       timer.start();
     },
     [settings.shuffle, timer],
   );
+
+  /**
+   * Pede para encerrar a sessão assim que o card em tela for resolvido. Nada é
+   * descartado: o que já foi concluído conta normalmente. Usado quando o tempo
+   * do quiz regressivo esgota — a questão aberta não é arrancada da mão.
+   */
+  const requestFinish = useCallback(() => {
+    endAfterCurrentRef.current = true;
+  }, []);
 
   // Encerra a sessão gravando o registro (só se algum card foi concluído).
   const finalize = useCallback(
@@ -191,7 +205,8 @@ export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
       setDone(nextDone);
       setQueue(nextQueue);
 
-      if (nextQueue.length === 0) {
+      // Fila vazia OU tempo esgotado (o card em tela acabou de ser resolvido).
+      if (nextQueue.length === 0 || endAfterCurrentRef.current) {
         finalize(nextDone, nextCorrect, nextHard, nextAgain);
       }
     },
@@ -202,7 +217,9 @@ export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
   const skip = useCallback(() => {
     const rest = queue.slice(1);
     setQueue(rest);
-    if (rest.length === 0) finalize(done, correctCount, hardCount, againCount);
+    if (rest.length === 0 || endAfterCurrentRef.current) {
+      finalize(done, correctCount, hardCount, againCount);
+    }
   }, [queue, done, correctCount, hardCount, againCount, finalize]);
 
   const reset = useCallback(() => {
@@ -214,6 +231,7 @@ export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
     setHardCount(0);
     setAgainCount(0);
     setElapsedSeconds(0);
+    endAfterCurrentRef.current = false;
   }, []);
 
   const currentCard = phase === 'studying' ? (queue[0] ?? null) : null;
@@ -233,6 +251,7 @@ export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
     start,
     grade,
     skip,
+    requestFinish,
     reset,
   };
 }

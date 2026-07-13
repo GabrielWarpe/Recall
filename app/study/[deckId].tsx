@@ -7,11 +7,16 @@ import type { Deck } from '@/types';
 import { db } from '@/services/database';
 import { getSessionCards } from '@/services/ai';
 import { useStudySession } from '@/hooks/useStudySession';
+import { useTimedSession } from '@/hooks/useTimedSession';
 import { deckSupportsQuiz, cardSupportsQuiz } from '@/utils/practice';
 import { SwipeCard } from '@/components/SwipeCard';
 import { QuizQuestion } from '@/components/QuizQuestion';
+import { SessionTimer } from '@/components/SessionTimer';
+import { StudySetup } from '@/components/StudySetup';
+import { TimeUpNotice, TIME_UP_MESSAGE } from '@/components/TimeUpNotice';
 import { Button } from '@/components/ui/Button';
 import { cardShadow } from '@/components/ui/Card';
+import { formatClock } from '@/utils/stats';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 /** Hash determinístico (djb2) — sorteio de formato estável por pergunta. */
@@ -30,10 +35,11 @@ export default function StudySessionScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const [deck, setDeck] = useState<Deck | null>(null);
-  const [sessionStarted, setSessionStarted] = useState(false);
   const [noDue, setNoDue] = useState(false);
 
   const session = useStudySession(deck);
+  // Cronômetro + tela de início: mesma lógica de todos os modos.
+  const timed = useTimedSession(session);
 
   // ── Modo misto (flashcards + quiz intercalados) ───────────────────────────
   // Degrada para flashcards puro se o deck não suportar quiz.
@@ -55,32 +61,27 @@ export default function StudySessionScreen() {
 
   // Monta a sessão com os cards devidos + novos (limitados). Se não houver nada
   // a revisar, mostra o estado "tudo em dia" com a opção de praticar mesmo assim.
+  // Os cards ficam PENDENTES: quem inicia é a tela de início.
   useEffect(() => {
-    if (!deck || sessionStarted || noDue) return;
+    if (!deck || timed.started || noDue || timed.pending) return;
     const cards = getSessionCards(deck);
-    if (cards.length > 0) {
-      session.start(cards);
-      setSessionStarted(true);
-    } else {
-      setNoDue(true);
-    }
-  }, [deck, sessionStarted, noDue]);
+    if (cards.length > 0) timed.prepare(cards);
+    else setNoDue(true);
+  }, [deck, noDue, timed.started, timed.pending, timed.prepare]);
 
   if (!deck) return null;
 
   const practiceAll = () => {
     setNoDue(false);
-    session.start(deck.cards);
-    setSessionStarted(true);
+    timed.prepare(deck.cards);
   };
 
   const restart = () => {
-    setSessionStarted(false);
     setNoDue(false);
     missedIdsRef.current = new Set();
     presentationIndexRef.current = -1;
     lastQuestionKeyRef.current = '';
-    session.reset();
+    timed.resetTimed();
     void db.decks.getOne(deck.id).then(d => {
       if (d) setDeck(d);
     });
@@ -143,6 +144,24 @@ export default function StudySessionScreen() {
     );
   }
 
+  // ── Tela de início (config do cronômetro desta sessão) ────────────────────
+  if (timed.showSetup && session.phase !== 'finished') {
+    return (
+      <SafeAreaView className="flex-1 bg-background">
+        <StudySetup
+          modeLabel={isMixed ? 'Alternado' : 'Estudo'}
+          modeIcon={isMixed ? 'shuffle' : 'layers'}
+          deckTitle={deck.title}
+          cardCount={timed.pending?.length ?? 0}
+          config={timed.config}
+          onChange={timed.setConfig}
+          onStart={timed.begin}
+          onCancel={() => router.back()}
+        />
+      </SafeAreaView>
+    );
+  }
+
   // ── Results screen ────────────────────────────────────────────────────────
   if (session.phase === 'finished') {
     const reviewed = session.correctCount + session.hardCount;
@@ -182,6 +201,21 @@ export default function StudySessionScreen() {
           <Text className="text-outline font-inter-regular text-base text-center mt-2">
             {deck.title}
           </Text>
+
+          {/* Tempo total (só com o app aberto). Aparece mesmo com o relógio
+              OCULTO — o que ele esconde é o durante, não o resultado. */}
+          {timed.config.enabled && (
+            <View className="flex-row items-center gap-1.5 mt-3">
+              <Ionicons name="time-outline" size={15} color={colors.outline} />
+              <Text
+                className="text-outline font-inter-medium text-sm"
+                style={{ fontVariant: ['tabular-nums'] }}
+              >
+                {formatClock(session.elapsedSeconds)}
+              </Text>
+            </View>
+          )}
+
           <Text className="text-on-surface-variant font-inter-medium text-sm text-center mt-3">
             {message}
           </Text>
@@ -290,10 +324,20 @@ export default function StudySessionScreen() {
             {deck.title}
           </Text>
         </View>
-        <View className="w-10 items-end">
+        <View className="items-end gap-0.5">
           <Text className="text-outline font-inter-regular text-xs">
             {position}/{session.total}
           </Text>
+          {/* Cronômetro desligado ou oculto → sem mostrador. Oculto, o tempo
+              continua correndo e sendo gravado (a medição vive na sessão). */}
+          {timed.showClock && (
+            <SessionTimer
+              getDisplay={timed.getDisplay}
+              running={session.phase === 'studying'}
+              phase={timed.phase}
+              countdown={timed.isCountdown}
+            />
+          )}
         </View>
       </View>
 
@@ -339,12 +383,16 @@ export default function StudySessionScreen() {
         <QuizQuestion
           card={session.currentCard}
           questionKey={questionKey}
-          isLastIfCorrect={session.total - session.done === 1}
+          isLastIfCorrect={session.total - session.done === 1 || timed.expired}
+          notice={timed.expired ? TIME_UP_MESSAGE : undefined}
           onAnswer={handleQuizAnswer}
           onSkip={() => session.skip()}
         />
       ) : (
         <View className="flex-1 items-center justify-center px-6">
+          {/* Tempo esgotado: o card em tela ainda vale; a sessão encerra depois
+              de avaliá-lo ou pulá-lo. */}
+          {timed.expired && <TimeUpNotice className="mb-4 w-full" />}
           {session.currentCard != null && (
             <SwipeCard
               key={

@@ -32,6 +32,15 @@ export function makeFlashcard(
  * O armazenamento do intervalo é em dias; "De novo" reagenda para o dia seguinte
  * (a re-exibição imediata é tratada pela fila da sessão, não pelo agendamento).
  */
+
+/** Teto do intervalo, em dias (100 anos — o mesmo do Anki). Ver `reviewCard`. */
+export const MAX_INTERVAL_DAYS = 36500;
+
+/** Protege contra intervalos corrompidos já gravados (NaN, negativo, absurdo). */
+export function sanitizeInterval(days: number): number {
+  if (!Number.isFinite(days) || days < 1) return 1;
+  return Math.min(Math.round(days), MAX_INTERVAL_DAYS);
+}
 export function reviewCard(card: Flashcard, grade: Grade): Flashcard {
   const now = new Date();
   let { interval, repetitions, easeFactor } = card;
@@ -54,6 +63,12 @@ export function reviewCard(card: Flashcard, grade: Grade): Flashcard {
     const delta = grade === 'hard' ? -0.15 : grade === 'easy' ? 0.15 : 0;
     easeFactor = Math.max(1.3, easeFactor + delta);
   }
+
+  // Teto obrigatório: o intervalo é MULTIPLICADO a cada acerto, então sem um
+  // limite ele explode (acertar o mesmo card ~15 vezes seguidas já passa de um
+  // milhão de dias, e o `next_review_date` vira uma data no ano 19296 — o
+  // Postgres rejeita com 22009). O Anki usa o mesmo teto de 100 anos.
+  interval = Math.min(interval, MAX_INTERVAL_DAYS);
 
   const nextReview = new Date(now);
   nextReview.setDate(nextReview.getDate() + interval);

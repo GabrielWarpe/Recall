@@ -23,7 +23,13 @@ import { useThemeColors } from '@/hooks/useThemeColors';
 import { SettingsRow } from '@/components/settings/SettingsRow';
 import { SettingsSection } from '@/components/settings/SettingsSection';
 import { TimePickerRow } from '@/components/settings/TimePickerRow';
-import { GOAL_MIN, GOAL_MAX, clampGoal } from '@/constants/study';
+import {
+  GOAL_MIN,
+  GOAL_MAX,
+  clampGoal,
+  TIMER_LIMIT_STEPS,
+  clampTimerLimit,
+} from '@/constants/study';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
 // Caixa de entrada para onde vai o "Enviar feedback". Troque quando houver um
@@ -209,6 +215,63 @@ export default function SettingsScreen() {
               onValueChange: v => update('autoReveal', v),
             }}
           />
+          {/* Cronômetro das sessões (todos os modos): este é o PADRÃO da conta.
+              A tela de início permite mudar só para aquela sessão, sem tocar
+              aqui. */}
+          <SettingsRow
+            icon="stopwatch"
+            iconColor={colors.primary}
+            title="Cronômetro"
+            subtitle="Padrão ao iniciar uma sessão"
+            toggle={{
+              value: settings.studyTimer,
+              onValueChange: v => update('studyTimer', v),
+            }}
+          />
+          {settings.studyTimer && (
+            <>
+              <SettingsRow
+                icon="swap-vertical"
+                iconColor="#ffb690"
+                title="Modo do cronômetro"
+                value={
+                  settings.studyTimerMode === 'down' ? 'Regressivo' : 'Crescente'
+                }
+                onPress={() =>
+                  pickOption('Modo do cronômetro', ['Crescente', 'Regressivo'], o =>
+                    update('studyTimerMode', o === 'Regressivo' ? 'down' : 'up'),
+                  )
+                }
+              />
+              {settings.studyTimerMode === 'down' && (
+                <SettingsRow
+                  icon="hourglass"
+                  iconColor={colors.tertiary}
+                  title="Tempo limite"
+                  subtitle="O quiz encerra após a questão em tela"
+                  value={`${settings.studyTimerMinutes} min`}
+                  onPress={() =>
+                    pickOption(
+                      'Tempo limite',
+                      TIMER_LIMIT_STEPS.map(m => `${m} min`),
+                      o =>
+                        update('studyTimerMinutes', clampTimerLimit(parseInt(o, 10))),
+                    )
+                  }
+                />
+              )}
+              <SettingsRow
+                icon="eye-off"
+                iconColor={colors.primary}
+                title="Mostrar o relógio"
+                subtitle="Oculto, o tempo continua sendo medido"
+                toggle={{
+                  value: settings.studyTimerVisible,
+                  onValueChange: v => update('studyTimerVisible', v),
+                }}
+              />
+            </>
+          )}
         </SettingsSection>
 
         {/* ── Aparência ── */}
