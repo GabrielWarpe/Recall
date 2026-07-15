@@ -296,26 +296,28 @@ export function SwipeCard({
               </TouchableOpacity>
             </View>
 
-            {/* Desfazer: discreto, só quando há o que voltar. */}
-            {canGoBack && (
-              <TouchableOpacity
-                onPress={onBack}
-                activeOpacity={0.7}
-                className="py-1 flex-row items-center justify-center gap-1.5"
-              >
-                <Ionicons name="arrow-undo-outline" size={15} color={colors.outline} />
-                <Text className="text-outline font-inter-medium text-sm">
-                  Desfazer
-                </Text>
-              </TouchableOpacity>
-            )}
-
             {settings.swipeGestures && (
               <Text className="text-outline font-inter-regular text-xs text-center">
                 Arraste ← para "errei" ou → para "entendi"
               </Text>
             )}
           </View>
+        )}
+
+        {/* Desfazer: fora do bloco condicional, então fica acessível ANTES de
+            virar o próximo card também — senão você teria que virar a carta
+            atual só para poder corrigir a resposta anterior. */}
+        {canGoBack && (
+          <TouchableOpacity
+            onPress={onBack}
+            activeOpacity={0.7}
+            className="mt-3 py-1 flex-row items-center justify-center gap-1.5"
+          >
+            <Ionicons name="arrow-undo-outline" size={15} color={colors.outline} />
+            <Text className="text-outline font-inter-medium text-sm">
+              Desfazer resposta anterior
+            </Text>
+          </TouchableOpacity>
         )}
       </View>
     </View>

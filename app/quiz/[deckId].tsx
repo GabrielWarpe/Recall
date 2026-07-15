@@ -232,11 +232,7 @@ export default function QuizScreen() {
           card={currentCard}
           questionKey={questionKey}
           isLast={isLast || timed.expired}
-          notice={
-            timed.expired
-              ? 'Tempo esgotado — conclua esta questão para ver o resultado.'
-              : undefined
-          }
+          notice={timed.expired ? TIME_UP_MESSAGE : undefined}
           onAnswer={handleAnswer}
           onSkip={() => session.skip()}
         />

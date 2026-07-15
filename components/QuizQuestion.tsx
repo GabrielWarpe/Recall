@@ -268,7 +268,7 @@ export function QuizQuestion({
           >
             {answeredCorrectly
               ? '✓ Correto!'
-              : '✗ Incorreto — a resposta certa está destacada. Ela voltará no fim da sessão.'}
+              : '✗ Incorreto — a resposta certa está destacada.'}
           </Text>
           <Button variant="primary" size="lg" onPress={handleNext}>
             {isLast ? 'Ver resultado' : 'Próxima'}

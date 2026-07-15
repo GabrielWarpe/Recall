@@ -52,6 +52,10 @@ export function SessionResult({
   const total = correct + wrong + skipped;
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
 
+  // "6/55" cabe grande; "1000/2000" precisa encolher para não vazar do anel.
+  const ringChars = `${correct}/${total}`.length;
+  const ringFontSize = ringChars <= 5 ? 36 : ringChars <= 7 ? 28 : 22;
+
   // Título encorajador, calibrado pelo aproveitamento.
   const headline =
     pct >= 80
@@ -88,13 +92,22 @@ export function SessionResult({
               color={colors.success}
             />
             <View
-              className="items-center justify-center"
+              className="items-center justify-center px-3"
               style={StyleSheet.absoluteFill}
               pointerEvents="none"
             >
               <Text
-                className="text-on-surface font-jakarta-extrabold text-4xl"
-                style={{ fontVariant: ['tabular-nums'] }}
+                className="text-on-surface font-jakarta-extrabold"
+                // Fonte encolhe conforme o texto cresce (decks grandes); a
+                // largura tabular mantém tudo alinhado. `adjustsFontSizeToFit`
+                // é a rede de segurança para o caso extremo.
+                style={{
+                  fontSize: ringFontSize,
+                  lineHeight: ringFontSize + 2,
+                  fontVariant: ['tabular-nums'],
+                }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
               >
                 {correct}/{total}
               </Text>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -44,10 +44,6 @@ export default function StudySessionScreen() {
   // Degrada para flashcards puro se o deck não suportar quiz.
   const isMixed = mode === 'mixed' && deck != null && deckSupportsQuiz(deck);
   const mixPattern: 'alt' | 'random' = mix === 'random' ? 'random' : 'alt';
-  // Contador de APRESENTAÇÕES (inclui puladas — done/againCount não contam
-  // skip, então a paridade do alternado precisa de um contador próprio).
-  const presentationIndexRef = useRef(-1);
-  const lastQuestionKeyRef = useRef('');
 
   useEffect(() => {
     if (!deckId) return;
@@ -81,8 +77,6 @@ export default function StudySessionScreen() {
     const cards =
       scope === 'wrong' ? deck.cards.filter(c => wrong.has(c.id)) : deck.cards;
     setNoDue(false);
-    presentationIndexRef.current = -1;
-    lastQuestionKeyRef.current = '';
     timed.resetTimed();
     timed.prepare(cards);
   };
@@ -191,20 +185,18 @@ export default function StudySessionScreen() {
   const questionKey = session.currentCard
     ? `${session.currentCard.id}:${session.done}:${session.againCount}`
     : '';
-  // Conta apresentações quando a pergunta muda (skip incluso).
-  if (questionKey && questionKey !== lastQuestionKeyRef.current) {
-    lastQuestionKeyRef.current = questionKey;
-    presentationIndexRef.current += 1;
-  }
 
-  // Formato do card do topo no misto: alternado por paridade da apresentação
-  // ou sorteio estável por pergunta; card sem distrator cai para flashcard.
+  // Formato do card do topo no misto: alternado pela paridade de `done` (nº de
+  // cards já processados — uma passada, então cada card avança `done` em 1) ou
+  // sorteio estável por pergunta; card sem distrator cai para flashcard.
+  // Usar `done` em vez de um ref mutado no render deixa o "Desfazer" coerente:
+  // ao voltar, a paridade acompanha, sem dessincronizar a alternância.
   const showAsQuiz =
     isMixed &&
     session.currentCard != null &&
     cardSupportsQuiz(session.currentCard) &&
     (mixPattern === 'alt'
-      ? presentationIndexRef.current % 2 === 1
+      ? session.done % 2 === 1
       : hashStr(questionKey) % 2 === 1);
 
   // Acertou ou errou (uma passada — o card sai da fila).

@@ -156,6 +156,16 @@ export default function WriteScreen() {
     session.answer(isCorrect);
   };
 
+  // Pula o card sem responder — conta como "Pulou" no resultado.
+  const handleSkip = () => {
+    if (!currentCard || currentResult != null) return;
+    if (Date.now() - advancedAtRef.current < 300) return;
+    advancedAtRef.current = Date.now();
+    Keyboard.dismiss();
+    setDraft('');
+    session.skip();
+  };
+
   // 'all' = praticar o deck inteiro de novo; 'wrong' = só as que errei nesta
   // sessão. Os ids errados são lidos ANTES do reset (que os limpa) e a
   // preparação síncrona evita a corrida com o auto-prepare.
@@ -212,7 +222,7 @@ export default function WriteScreen() {
   // ── Pergunta ativa ───────────────────────────────────────────────────────
   const progress = session.total > 0 ? session.done / session.total : 0;
   const position = Math.min(session.done + 1, session.total);
-  const isLastIfCorrect = session.total - session.done === 1;
+  const isLast = session.total - session.done === 1;
 
   return (
     <SafeAreaView className="flex-1 bg-background">
@@ -311,15 +321,31 @@ export default function WriteScreen() {
                 >
                   Verificar
                 </Button>
-                <TouchableOpacity
-                  onPress={handleDontKnow}
-                  activeOpacity={0.7}
-                  className="py-1 items-center"
-                >
-                  <Text className="text-outline font-inter-medium text-sm">
-                    Não sei
-                  </Text>
-                </TouchableOpacity>
+                <View className="flex-row items-center justify-center gap-6">
+                  <TouchableOpacity
+                    onPress={handleDontKnow}
+                    activeOpacity={0.7}
+                    className="py-1"
+                  >
+                    <Text className="text-outline font-inter-medium text-sm">
+                      Não sei
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleSkip}
+                    activeOpacity={0.7}
+                    className="py-1 flex-row items-center gap-1.5"
+                  >
+                    <Ionicons
+                      name="play-skip-forward-outline"
+                      size={15}
+                      color={colors.outline}
+                    />
+                    <Text className="text-outline font-inter-medium text-sm">
+                      Pular
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </>
             ) : (
               <>
@@ -371,13 +397,8 @@ export default function WriteScreen() {
                   )}
 
                 <Button variant="primary" size="lg" onPress={handleNext}>
-                  {isCorrect && isLastIfCorrect ? 'Ver resultado' : 'Próxima'}
+                  {isLast ? 'Ver resultado' : 'Próxima'}
                 </Button>
-                {!isCorrect && (
-                  <Text className="text-outline font-inter-regular text-xs text-center">
-                    Este card volta no fim da prática.
-                  </Text>
-                )}
               </>
             )}
           </ScrollView>
