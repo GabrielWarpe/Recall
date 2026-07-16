@@ -8,7 +8,7 @@ import type { Deck, Flashcard, StudySession } from '@/types';
 import { db } from '@/services/database';
 import { exportDeck, exportCards, BackupError } from '@/services/backup';
 import { getDueCards } from '@/services/ai';
-import { sessionAccuracy } from '@/utils/stats';
+import { sessionAccuracy, STUDY_MODE_LABEL, STUDY_MODE_ICON } from '@/utils/stats';
 import { Button } from '@/components/ui/Button';
 import { cardShadow } from '@/components/ui/Card';
 import { DeckAvatar } from '@/components/DeckAvatar';
@@ -256,6 +256,7 @@ export default function DeckDetailScreen() {
           <View className="gap-2">
             {attempts.map((a, i) => {
               const pct = sessionAccuracy(a);
+              const mode = a.mode ?? 'flash';
               return (
                 <View
                   key={a.id}
@@ -271,9 +272,17 @@ export default function DeckDetailScreen() {
                     <Text className="text-on-surface font-inter-medium text-sm">
                       {a.correct}/{a.total} acertos
                     </Text>
-                    <Text className="text-outline font-inter-regular text-xs mt-0.5">
-                      {format(new Date(a.date), "d MMM 'às' HH:mm")}
-                    </Text>
+                    <View className="flex-row items-center gap-1 mt-0.5">
+                      <Ionicons
+                        name={STUDY_MODE_ICON[mode]}
+                        size={11}
+                        color={colors.outline}
+                      />
+                      <Text className="text-outline font-inter-regular text-xs">
+                        {STUDY_MODE_LABEL[mode]} ·{' '}
+                        {format(new Date(a.date), "d MMM 'às' HH:mm")}
+                      </Text>
+                    </View>
                   </View>
                   <Text
                     className={`font-jakarta-bold text-lg ${accuracyColor(pct)}`}

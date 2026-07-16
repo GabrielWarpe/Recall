@@ -17,7 +17,12 @@ import { useDecks } from '@/hooks/useDecks';
 import { useAuth } from '@/contexts/AuthContext';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { levelFromXp, tierForLevel, nextTier } from '@/utils/xp';
-import { sessionAccuracy, formatDuration } from '@/utils/stats';
+import {
+  sessionAccuracy,
+  formatDuration,
+  STUDY_MODE_LABEL,
+  STUDY_MODE_ICON,
+} from '@/utils/stats';
 import { TAB_SCREEN_BOTTOM_INSET } from '@/constants/layout';
 
 const DAYS = 7;
@@ -428,6 +433,7 @@ export default function ProgressScreen() {
                 .slice(0, 8)
                 .map(session => {
                   const pct = sessionAccuracy(session);
+                  const mode = session.mode ?? 'flash';
                   return (
                     <View
                       key={session.id}
@@ -438,12 +444,20 @@ export default function ProgressScreen() {
                         <Text className="text-on-surface font-inter-medium text-sm">
                           {session.deckTitle}
                         </Text>
-                        <Text className="text-outline font-inter-regular text-xs mt-0.5">
-                          {format(
-                            new Date(session.date),
-                            "d MMM 'às' HH:mm",
-                          )}
-                        </Text>
+                        <View className="flex-row items-center gap-1 mt-0.5">
+                          <Ionicons
+                            name={STUDY_MODE_ICON[mode]}
+                            size={11}
+                            color={colors.outline}
+                          />
+                          <Text className="text-outline font-inter-regular text-xs">
+                            {STUDY_MODE_LABEL[mode]} ·{' '}
+                            {format(
+                              new Date(session.date),
+                              "d MMM 'às' HH:mm",
+                            )}
+                          </Text>
+                        </View>
                       </View>
                       <View className="items-end gap-0.5">
                         <Text className="text-on-surface font-jakarta-semibold text-sm">

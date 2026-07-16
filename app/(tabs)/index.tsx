@@ -13,6 +13,7 @@ import {
 } from '@/components/StudyModePicker';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ProgressRing } from '@/components/ProgressRing';
+import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useAuth } from '@/contexts/AuthContext';
@@ -110,12 +111,7 @@ export default function HomeScreen() {
             <Text className="text-on-surface-variant font-inter-medium text-sm">
               {greeting}
             </Text>
-            <Text
-              className="text-on-surface font-jakarta-extrabold text-3xl"
-              style={{ letterSpacing: -0.5 }}
-            >
-              Recall
-            </Text>
+            <BrandLogo height={26} style={{ marginTop: 2 }} />
           </View>
           <StreakBadge streak={streak} />
         </View>

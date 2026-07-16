@@ -39,6 +39,11 @@ module.exports = {
         success: 'rgb(var(--color-success) / <alpha-value>)',
         warning: 'rgb(var(--color-warning) / <alpha-value>)',
         info: 'rgb(var(--color-info) / <alpha-value>)',
+        // Cores fixas da marca Blink — hex estático (NÃO variam por tema
+        // claro/escuro, ao contrário das cores semânticas acima). Disponíveis
+        // como bg-brand-midnight / text-brand-teal etc.
+        'brand-midnight': '#0F1D33',
+        'brand-teal': '#15C2B0',
       },
       // Tamanhos via variáveis CSS (escaláveis em runtime pela config "Tamanho da fonte").
       fontSize: {

@@ -122,7 +122,7 @@ async function scheduleStudyReminders(
     await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Hora de estudar 📚',
-        body: 'Revise seus decks no Recall e mantenha o ritmo.',
+        body: 'Revise seus decks no Blink e mantenha o ritmo.',
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,

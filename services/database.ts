@@ -114,7 +114,10 @@ function rowToSession(
     deckId: row.playlist_id ?? '',
     deckTitle,
     date: row.started_at,
-    mode: row.mode === 'quiz' || row.mode === 'write' ? row.mode : 'flash',
+    mode:
+      row.mode === 'quiz' || row.mode === 'write' || row.mode === 'mixed'
+        ? row.mode
+        : 'flash',
     correct: row.correct_count,
     hard: row.hard_count,
     again: row.again_count,
@@ -278,7 +281,7 @@ export const db = {
         if (dropped) {
           if (__DEV__) {
             console.warn(
-              `[Recall] Sessão gravada SEM ${dropped}: rode a migração dessas colunas.`,
+              `[Blink] Sessão gravada SEM ${dropped}: rode a migração dessas colunas.`,
             );
           }
           return db.sessions.create(retry);
@@ -572,7 +575,7 @@ export const db = {
           /tags|cover_url|description/i.test(msg)
         ) {
           console.warn(
-            '[Recall] Deck criado SEM capa/tags: o banco não tem as colunas novas. ' +
+            '[Blink] Deck criado SEM capa/tags: o banco não tem as colunas novas. ' +
               'Execute o supabase/schema.sql no SQL Editor.',
           );
           playlist = await db.playlists.create(base);

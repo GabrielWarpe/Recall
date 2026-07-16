@@ -120,7 +120,7 @@ export default function ProfileScreen() {
       if (!ok) {
         Alert.alert(
           'Permissão necessária',
-          'Ative as notificações do Recall nas configurações do sistema para receber lembretes.',
+          'Ative as notificações do Blink nas configurações do sistema para receber lembretes.',
         );
         return;
       }

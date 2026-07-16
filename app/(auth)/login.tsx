@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { BrandLogo } from '@/components/BrandLogo';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 function mapAuthError(message: string): string {
@@ -72,12 +73,7 @@ export default function LoginScreen() {
         >
           {/* Logo */}
           <View className="items-center mb-10">
-            <View className="w-16 h-16 rounded-2xl bg-primary-container items-center justify-center mb-4">
-              <Ionicons name="albums" size={32} color="#ede0ff" />
-            </View>
-            <Text className="text-on-surface font-jakarta-extrabold text-3xl">
-              Recall
-            </Text>
+            <BrandLogo height={40} style={{ marginBottom: 12 }} />
             <Text className="text-outline font-inter-regular text-sm mt-1">
               Entre para continuar estudando
             </Text>

@@ -1,14 +1,16 @@
 {
   "expo": {
-    "name": "Recall",
-    "slug": "recall",
+    "name": "Blink",
+    "slug": "blink",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "scheme": "recall",
+    "scheme": "blink",
+    "icon": "./assets/brand/blink_app_icon_1024.png",
     "splash": {
+      "image": "./assets/brand/blink_app_icon_1024.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0b0f14"
+      "backgroundColor": "#0F1D33"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -19,12 +21,14 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0b0f14"
+        "foregroundImage": "./assets/brand/blink_adaptive_foreground.png",
+        "backgroundColor": "#0F1D33"
       },
       "package": "com.recall.app"
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/brand/blink_app_icon_1024.png"
     },
     "plugins": [
       "expo-router",
@@ -41,7 +45,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "O Recall usa suas fotos para você escolher uma imagem de perfil."
+          "photosPermission": "O Blink usa suas fotos para você escolher uma imagem de perfil."
         }
       ],
       "@react-native-community/datetimepicker"

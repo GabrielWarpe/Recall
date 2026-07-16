@@ -36,14 +36,16 @@ export default function StudySessionScreen() {
   const [deck, setDeck] = useState<Deck | null>(null);
   const [noDue, setNoDue] = useState(false);
 
-  const session = useStudySession(deck);
-  // Cronômetro + tela de início: mesma lógica de todos os modos.
-  const timed = useTimedSession(session);
-
   // ── Modo misto (flashcards + quiz intercalados) ───────────────────────────
-  // Degrada para flashcards puro se o deck não suportar quiz.
+  // Degrada para flashcards puro se o deck não suportar quiz. Calculado ANTES
+  // do useStudySession: a sessão precisa saber se é 'mixed' para gravar o modo
+  // certo (senão ela ficava indistinguível de flashcards puro no histórico).
   const isMixed = mode === 'mixed' && deck != null && deckSupportsQuiz(deck);
   const mixPattern: 'alt' | 'random' = mix === 'random' ? 'random' : 'alt';
+
+  const session = useStudySession(deck, isMixed ? 'mixed' : 'flash');
+  // Cronômetro + tela de início: mesma lógica de todos os modos.
+  const timed = useTimedSession(session);
 
   useEffect(() => {
     if (!deckId) return;

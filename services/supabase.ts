@@ -20,7 +20,7 @@ const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 if (!supabaseUrl || !supabaseAnonKey) {
   // Mensagem clara durante o desenvolvimento caso o .env não esteja configurado.
   console.warn(
-    '[Recall] Variáveis EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY ausentes. ' +
+    '[Blink] Variáveis EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY ausentes. ' +
       'Configure o arquivo .env.local antes de iniciar o app.',
   );
 }

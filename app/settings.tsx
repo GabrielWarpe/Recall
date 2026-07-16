@@ -83,7 +83,7 @@ export default function SettingsScreen() {
       if (!ok) {
         Alert.alert(
           'Permissão necessária',
-          'Ative as notificações do Recall nas configurações do sistema para receber lembretes.',
+          'Ative as notificações do Blink nas configurações do sistema para receber lembretes.',
         );
         return;
       }
@@ -94,13 +94,13 @@ export default function SettingsScreen() {
   const handleShare = () => {
     void Share.share({
       message:
-        'Estude com flashcards e IA no Recall! Memorize qualquer coisa de forma inteligente. 🧠',
+        'Estude com flashcards e IA no Blink! Memorize qualquer coisa de forma inteligente. 🧠',
     }).catch(() => undefined);
   };
 
   const handleFeedback = async () => {
     const url = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(
-      `Feedback do Recall (v${APP_VERSION})`,
+      `Feedback do Blink (v${APP_VERSION})`,
     )}`;
     const canOpen = await Linking.canOpenURL(url).catch(() => false);
     if (canOpen) {
@@ -116,7 +116,7 @@ export default function SettingsScreen() {
 
   const handleAbout = () => {
     Alert.alert(
-      'Recall',
+      'Blink',
       `Versão ${APP_VERSION}\n\nApp de flashcards com criação assistida por IA.\nFeito com Expo + Supabase.\n\nEmblemas de patentes e conquistas: game-icons.net (CC BY 3.0).`,
     );
   };
@@ -430,7 +430,7 @@ export default function SettingsScreen() {
         </View>
 
         <Text className="text-outline font-inter-regular text-xs text-center mt-6">
-          Recall v{APP_VERSION}
+          Blink v{APP_VERSION}
         </Text>
       </ScrollView>
     </SafeAreaView>

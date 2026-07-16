@@ -49,6 +49,15 @@ export function SwipeCard({
   const [isFlipped, setIsFlipped] = useState(false);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  // Trava contra disparo duplo: o arraste roda na UI thread e os botões na JS
+  // thread, e os dois podiam levar o MESMO card a responder duas vezes (um
+  // toque rápido no botão antes da carta sair de tela, ou o gesto terminando
+  // quase junto de um toque). Sem isto, num baralho de 2 cards a sessão
+  // concluía depois de uma única resposta do usuário — o segundo disparo
+  // consumia o card seguinte sozinho. É shared value (não useRef/useState)
+  // porque precisa ser lida/escrita dos dois lados da ponte de thread.
+  const decided = useSharedValue(false);
+  const [locked, setLocked] = useState(false);
 
   const exitDuration = settings.reduceMotion ? 120 : 280;
 
@@ -81,9 +90,14 @@ export function SwipeCard({
 
   // Anima o card para fora e dispara a resposta: errei sai à esquerda, acertei
   // à direita. A vibração dispara já no toque (não no fim da animação), então o
-  // feedback é imediato.
-  const flyOut = (correct: boolean) => {
-    fireAnswerHaptic(correct);
+  // feedback é imediato. Único ponto de entrada para os DOIS caminhos (botão e
+  // arraste) — é o que faz a trava `decided` valer para ambos.
+  function flyOut(correct: boolean) {
+    'worklet';
+    if (decided.value) return;
+    decided.value = true;
+    runOnJS(setLocked)(true);
+    runOnJS(fireAnswerHaptic)(correct);
     translateX.value = withTiming(
       (correct ? 1 : -1) * width * 1.6,
       { duration: exitDuration },
@@ -92,35 +106,25 @@ export function SwipeCard({
         if (finished) runOnJS(onAnswer)(correct);
       },
     );
-  };
+  }
 
   // O arraste só é habilitado após virar o card — e se os gestos estiverem
   // ativos. Esquerda = errei, direita = acertei (os mesmos dois da barra).
+  // Chama a MESMA `flyOut` dos botões (worklet-a-worklet, sem hop de thread)
+  // em vez de duplicar a animação — antes cada caminho tinha sua própria
+  // cópia, e nenhum dos dois se sabia do outro.
   const pan = Gesture.Pan()
     .enabled(isFlipped && settings.swipeGestures)
     .onUpdate(e => {
+      if (decided.value) return;
       translateX.value = e.translationX;
       translateY.value = e.translationY * 0.25;
     })
     .onEnd(e => {
       if (e.translationX > SWIPE_THRESHOLD) {
-        runOnJS(fireAnswerHaptic)(true);
-        translateX.value = withTiming(
-          width * 1.6,
-          { duration: exitDuration },
-          () => {
-            runOnJS(onAnswer)(true);
-          },
-        );
+        flyOut(true);
       } else if (e.translationX < -SWIPE_THRESHOLD) {
-        runOnJS(fireAnswerHaptic)(false);
-        translateX.value = withTiming(
-          -width * 1.6,
-          { duration: exitDuration },
-          () => {
-            runOnJS(onAnswer)(false);
-          },
-        );
+        flyOut(false);
       } else {
         translateX.value = withSpring(0, { damping: 20, stiffness: 200 });
         translateY.value = withSpring(0, { damping: 20, stiffness: 200 });
@@ -241,6 +245,7 @@ export function SwipeCard({
             <View className="flex-row gap-3">
               <TouchableOpacity
                 onPress={() => flyOut(false)}
+                disabled={locked}
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel={`Errei. ${wrongCount} até agora`}
@@ -248,6 +253,7 @@ export function SwipeCard({
                 style={{
                   borderColor: colors.error + '4D',
                   backgroundColor: colors.error + '14',
+                  opacity: locked ? 0.5 : 1,
                 }}
               >
                 <Ionicons name="close" size={22} color={colors.error} />
@@ -269,6 +275,7 @@ export function SwipeCard({
 
               <TouchableOpacity
                 onPress={() => flyOut(true)}
+                disabled={locked}
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel={`Entendi. ${rightCount} até agora`}
@@ -276,6 +283,7 @@ export function SwipeCard({
                 style={{
                   borderColor: colors.success + '4D',
                   backgroundColor: colors.success + '14',
+                  opacity: locked ? 0.5 : 1,
                 }}
               >
                 <Ionicons name="checkmark" size={22} color={colors.success} />

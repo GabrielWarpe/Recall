@@ -112,7 +112,12 @@ export function buildAchievementStats(input: {
   const hoursByDay = new Map<string, { min: number; max: number }>();
   const weekdays = new Set<number>();
   const months = new Set<string>();
-  const sessionsByMode: Record<StudyMode, number> = { flash: 0, quiz: 0, write: 0 };
+  const sessionsByMode: Record<StudyMode, number> = {
+    flash: 0,
+    quiz: 0,
+    write: 0,
+    mixed: 0,
+  };
   let totalCards = 0;
   let totalStudySeconds = 0;
   let perfectSessions = 0;
@@ -391,7 +396,18 @@ export const ACHIEVEMENTS: Achievement[] = [
   one('dawn_15', '🌅 Clube das 6', '15 sessões antes das 7h.', s => s.earlyBirdSessions >= 15),
 
   // ── Modos de estudo ──
-  one('all_modes', '🔱 Tridente', 'Estudou nos 3 modos: flashcards, quiz e escrever.', s => s.distinctModes >= 3),
+  // Checa os 3 modos ORIGINAIS especificamente (não `distinctModes >= 3`): com
+  // 'mixed' como 4º modo possível, "3 distintos" passaria a aceitar combinações
+  // sem flashcards puro (ex.: misturado+quiz+escrever) — perderia o sentido.
+  one(
+    'all_modes',
+    '🔱 Tridente',
+    'Estudou nos 3 modos: flashcards, quiz e escrever.',
+    s =>
+      s.sessionsByMode.flash > 0 &&
+      s.sessionsByMode.quiz > 0 &&
+      s.sessionsByMode.write > 0,
+  ),
   one('quiz_25', '❓ Show do milhão', '25 sessões de quiz concluídas.', s => s.sessionsByMode.quiz >= 25),
   one('write_25', '🖋️ Datilógrafo', '25 sessões de escrever concluídas.', s => s.sessionsByMode.write >= 25),
 
@@ -405,7 +421,7 @@ export const ACHIEVEMENTS: Achievement[] = [
 ];
 
 if (__DEV__ && ACHIEVEMENTS.length !== 73) {
-  console.warn(`[Recall] ACHIEVEMENTS deveria ter 73 itens, tem ${ACHIEVEMENTS.length}`);
+  console.warn(`[Blink] ACHIEVEMENTS deveria ter 73 itens, tem ${ACHIEVEMENTS.length}`);
 }
 
 // ── Persistência e verificação ───────────────────────────────────────────────

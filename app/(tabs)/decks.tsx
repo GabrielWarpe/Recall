@@ -116,7 +116,7 @@ export default function DecksScreen() {
     if (e instanceof BackupError) {
       msg =
         e.code === 'INVALID'
-          ? 'O arquivo selecionado não é um backup válido do Recall.'
+          ? 'O arquivo selecionado não é um backup válido do Blink.'
           : e.code === 'READ'
             ? 'Não consegui ler o arquivo. Salve-o no app Arquivos e tente importar de lá.'
             : 'Nenhum conteúdo válido foi encontrado no arquivo.';

@@ -131,7 +131,7 @@ async function pushSettings(
     await AsyncStorage.setItem(dirtyKey, '1');
     if (__DEV__) {
       console.warn(
-        '[Recall/settings] NÃO salvou no banco (vale só neste aparelho). ' +
+        '[Blink/settings] NÃO salvou no banco (vale só neste aparelho). ' +
           'Confira se `profiles.settings` (jsonb) existe e se o RLS permite UPDATE. Erro:',
         (e as { message?: string } | null)?.message ?? e,
       );

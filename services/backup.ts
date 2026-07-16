@@ -14,7 +14,7 @@ import type { Deck, Flashcard } from '@/types';
  * Ao recriar, o progresso SM-2 sempre nasce zerado.
  */
 
-const APP = 'Recall' as const;
+const APP = 'Blink' as const;
 const VERSION = 2;
 
 interface CardExport {
@@ -197,7 +197,7 @@ export async function exportDecks(userId: string): Promise<BackupResult> {
   const decks = await db.decks.getAll(userId);
   if (decks.length === 0) throw new BackupError('EMPTY');
   const stamp = new Date().toISOString().slice(0, 10);
-  return shareDecks(decks, `recall-baralhos-${stamp}`, 'Exportar baralhos do Recall');
+  return shareDecks(decks, `blink-baralhos-${stamp}`, 'Exportar baralhos do Blink');
 }
 
 /** Exporta um único baralho já carregado. */
@@ -206,7 +206,7 @@ export async function exportDeck(deck: Deck): Promise<BackupResult> {
   const stamp = new Date().toISOString().slice(0, 10);
   return shareDecks(
     [deck],
-    `recall-${slugify(deck.title)}-${stamp}`,
+    `blink-${slugify(deck.title)}-${stamp}`,
     `Exportar "${deck.title}"`,
   );
 }
@@ -228,7 +228,7 @@ export async function exportCards(
   const stamp = new Date().toISOString().slice(0, 10);
   await sharePayload(
     payload,
-    `recall-cartoes-${slugify(deck.title)}-${stamp}`,
+    `blink-cartoes-${slugify(deck.title)}-${stamp}`,
     `Exportar ${cards.length} ${cards.length === 1 ? 'cartão' : 'cartões'}`,
   );
   return { deckCount: 0, cardCount: cards.length };

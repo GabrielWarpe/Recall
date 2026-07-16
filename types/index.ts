@@ -34,8 +34,11 @@ export interface Deck {
   lastStudied?: string;
 }
 
-/** Modo de estudo de uma sessão. Sessões antigas (sem coluna) contam como 'flash'. */
-export type StudyMode = 'flash' | 'quiz' | 'write';
+/**
+ * Modo de estudo de uma sessão. Sessões antigas (sem coluna) contam como
+ * 'flash'. 'mixed' = flashcards + quiz intercalados (StudyModePicker).
+ */
+export type StudyMode = 'flash' | 'quiz' | 'write' | 'mixed';
 
 /** Cronômetro: crescente (tempo decorrido) ou regressivo (limite). */
 export type StudyTimerMode = 'up' | 'down';

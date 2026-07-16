@@ -1,4 +1,4 @@
-import type { StudySession } from '@/types';
+import type { StudySession, StudyMode } from '@/types';
 
 /**
  * Taxa de acerto de uma sessão: acertos ÷ (acertos + erros). Cada erro conta,
@@ -38,3 +38,28 @@ export function formatClock(totalSeconds: number): string {
     ? `${hours}:${pad(minutes)}:${pad(seconds)}`
     : `${pad(minutes)}:${pad(seconds)}`;
 }
+
+/**
+ * Rótulo e ícone do tipo de exercício, usados nas listas de histórico
+ * (Progresso → Sessões recentes; detalhe do deck → Histórico). Mesmos ícones
+ * do StudyModePicker, para o mesmo conceito ler igual em toda parte.
+ */
+export const STUDY_MODE_LABEL: Record<StudyMode, string> = {
+  flash: 'Flashcards',
+  quiz: 'Quiz',
+  write: 'Escrever',
+  mixed: 'Alternado',
+};
+
+// Literal (não `ComponentProps<typeof Ionicons>`) de propósito: este arquivo é
+// utilitário puro, sem import de UI. Quem consome valida contra o tipo real
+// de `Ionicons` no próprio JSX.
+export const STUDY_MODE_ICON: Record<
+  StudyMode,
+  'albums' | 'help-circle' | 'create-outline' | 'shuffle'
+> = {
+  flash: 'albums',
+  quiz: 'help-circle',
+  write: 'create-outline',
+  mixed: 'shuffle',
+};

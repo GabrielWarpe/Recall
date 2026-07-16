@@ -136,7 +136,7 @@ export function buildAchievementVisuals(
   if (__DEV__) {
     const missing = ids.filter(id => !out[id]);
     if (missing.length > 0) {
-      console.warn(`[Recall] Conquistas sem ícone: ${missing.join(', ')}`);
+      console.warn(`[Blink] Conquistas sem ícone: ${missing.join(', ')}`);
     }
     // Unicidade 1:1: nenhum ícone pode servir a duas conquistas.
     const used = new Map<string, string>();
@@ -144,7 +144,7 @@ export function buildAchievementVisuals(
       const v = out[id];
       if (!v) continue;
       const owner = used.get(v.icon);
-      if (owner) console.warn(`[Recall] Ícone repetido: ${v.icon} (${owner} e ${id})`);
+      if (owner) console.warn(`[Blink] Ícone repetido: ${v.icon} (${owner} e ${id})`);
       used.set(v.icon, id);
     }
   }
