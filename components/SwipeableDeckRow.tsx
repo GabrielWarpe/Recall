@@ -1,5 +1,5 @@
 import React, { type ReactNode } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -28,6 +28,8 @@ interface SwipeableDeckRowProps {
   /** Arrastar para a ESQUERDA revela Exportar e Editar. */
   onExport: () => void;
   onEdit: () => void;
+  /** Quando false, a ação Exportar aparece travada (cópia baixada protegida). */
+  canExport?: boolean;
 }
 
 function ActionButton({
@@ -68,6 +70,7 @@ export function SwipeableDeckRow({
   onDelete,
   onExport,
   onEdit,
+  canExport = true,
 }: SwipeableDeckRowProps) {
   const colors = useThemeColors();
   const translateX = useSharedValue(0);
@@ -148,11 +151,20 @@ export function SwipeableDeckRow({
         ]}
       >
         <ActionButton
-          icon="share-outline"
+          icon={canExport ? 'share-outline' : 'lock-closed'}
           label="Exportar"
           background={colors.surfaceContainerHighest}
-          tint={colors.primary}
-          onPress={() => run(onExport)}
+          tint={canExport ? colors.primary : colors.outline}
+          onPress={() =>
+            canExport
+              ? run(onExport)
+              : run(() =>
+                  Alert.alert(
+                    'Exportação bloqueada',
+                    'Este deck foi baixado da comunidade e o autor não permite exportá-lo.',
+                  ),
+                )
+          }
         />
         <ActionButton
           icon="pencil"

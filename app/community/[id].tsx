@@ -21,12 +21,15 @@ import {
   getMyRating,
   downloadDeck,
   rateDeck,
+  reportDeck,
 } from '@/services/community';
 import type {
   CommunityDeckRow,
   CommunityCardRow,
   DeckRatingRow,
+  ReportReason,
 } from '@/types/db';
+import { isDerived } from '@/utils/community';
 import { useAuth } from '@/contexts/AuthContext';
 import { StarRating } from '@/components/StarRating';
 import { Button } from '@/components/ui/Button';
@@ -138,6 +141,24 @@ export default function CommunityDeckScreen() {
     }
   };
 
+  const handleReport = () => {
+    if (!id || !user) return;
+    const send = (reason: ReportReason) =>
+      void reportDeck({ communityDeckId: id, userId: user.id, reason })
+        .then(() =>
+          Alert.alert('Denúncia enviada', 'Obrigado. Vamos analisar este deck.'),
+        )
+        .catch(e =>
+          Alert.alert('Erro', errorMessage(e, 'Não foi possível denunciar.')),
+        );
+    Alert.alert('Denunciar deck', 'Qual o motivo?', [
+      { text: 'Plágio / conteúdo roubado', onPress: () => send('plagiarism') },
+      { text: 'Conteúdo impróprio', onPress: () => send('inappropriate') },
+      { text: 'Spam', onPress: () => send('spam') },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  };
+
   const handleSubmitRating = async () => {
     if (!id || !user || stars < 1 || submitting) return;
     setSubmitting(true);
@@ -208,9 +229,19 @@ export default function CommunityDeckScreen() {
         {/* Autor + métricas */}
         <View className="flex-row items-center gap-2">
           <MiniAvatar url={deck.author_avatar_url} name={deck.author_name} />
-          <Text className="text-on-surface-variant font-inter-medium text-sm flex-1" numberOfLines={1}>
-            {deck.author_name ?? 'Anônimo'}
-          </Text>
+          <View className="flex-1">
+            <Text className="text-on-surface-variant font-inter-medium text-sm" numberOfLines={1}>
+              {deck.author_name ?? 'Anônimo'}
+            </Text>
+            {isDerived(deck) && (
+              <Text className="text-outline font-inter-regular text-xs" numberOfLines={1}>
+                Adaptado de {deck.original_author_name ?? 'outro autor'}
+              </Text>
+            )}
+          </View>
+          <TouchableOpacity onPress={handleReport} hitSlop={8} className="p-1">
+            <Ionicons name="flag-outline" size={18} color={colors.outline} />
+          </TouchableOpacity>
         </View>
 
         <View className="flex-row items-center gap-4">

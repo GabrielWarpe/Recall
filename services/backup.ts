@@ -2,6 +2,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import { File, Paths, readAsStringAsync } from 'expo-file-system';
 import { db } from './database';
+import { canExport } from '@/utils/community';
 import { DECK_COLORS } from '@/constants/theme';
 import type { Deck, Flashcard } from '@/types';
 
@@ -192,9 +193,14 @@ async function shareDecks(
   return { deckCount: payload.decks.length, cardCount };
 }
 
-/** Exporta TODOS os baralhos do usuário num único arquivo. */
+/**
+ * Exporta TODOS os baralhos do usuário num único arquivo. Cópias baixadas da
+ * comunidade cujo autor não permite exportação são OMITIDAS (respeita a licença).
+ */
 export async function exportDecks(userId: string): Promise<BackupResult> {
-  const decks = await db.decks.getAll(userId);
+  const all = await db.decks.getAll(userId);
+  if (all.length === 0) throw new BackupError('EMPTY');
+  const decks = all.filter(canExport);
   if (decks.length === 0) throw new BackupError('EMPTY');
   const stamp = new Date().toISOString().slice(0, 10);
   return shareDecks(decks, `blink-baralhos-${stamp}`, 'Exportar baralhos do Blink');

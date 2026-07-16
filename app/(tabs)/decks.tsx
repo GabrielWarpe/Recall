@@ -28,6 +28,7 @@ import {
   type CardImportTarget,
 } from '@/services/backup';
 import { errorMessage } from '@/utils/errors';
+import { canExport } from '@/utils/community';
 import { DeckCard } from '@/components/DeckCard';
 import { SwipeableDeckRow } from '@/components/SwipeableDeckRow';
 import {
@@ -96,10 +97,17 @@ export default function DecksScreen() {
     setBusy(true);
     try {
       const { deckCount, cardCount } = await exportDecks(user.id);
-      // Sem alerta de sucesso: a folha de compartilhamento do sistema já
-      // confirma visualmente. Mantido só o caso "nada para exportar".
       void deckCount;
       void cardCount;
+      // Avisa se cópias baixadas protegidas ficaram de fora do arquivo.
+      const skipped = decks.filter(d => !canExport(d)).length;
+      if (skipped > 0) {
+        Alert.alert(
+          'Alguns decks omitidos',
+          `${skipped} ${skipped === 1 ? 'deck baixado protegido' : 'decks baixados protegidos'} não ${skipped === 1 ? 'foi incluído' : 'foram incluídos'} no arquivo, pois o autor não permite exportá-los.`,
+        );
+      }
+      // Fora isso, sem alerta de sucesso: a folha de compartilhamento já confirma.
     } catch (e) {
       if (e instanceof BackupError && e.code === 'EMPTY') {
         Alert.alert('Nada para exportar', 'Crie um baralho antes de exportar.');
@@ -396,6 +404,7 @@ export default function DecksScreen() {
               })
             }
             onEdit={() => router.push(`/deck/edit?id=${item.id}`)}
+            canExport={canExport(item)}
           >
             <DeckCard
               deck={item}

@@ -20,7 +20,10 @@ import {
   getPublishedFor,
   publishDeck,
   unpublishDeck,
+  REPUBLISH_FORBIDDEN,
 } from '@/services/community';
+import { isDownloadedCopy, canRepublish } from '@/utils/community';
+import type { DeckLicense } from '@/types/db';
 import { DeckCoverPicker } from '@/components/DeckCoverPicker';
 import { PublishToggle } from '@/components/PublishToggle';
 import { Input } from '@/components/ui/Input';
@@ -40,6 +43,9 @@ export default function EditDeckScreen() {
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(false);
   const [wasPublic, setWasPublic] = useState(false);
+  const [license, setLicense] = useState<DeckLicense>('protected');
+  // Cópia baixada sem permissão de republicar → toggle travado.
+  const [lockedReason, setLockedReason] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -56,6 +62,12 @@ export default function EditDeckScreen() {
         setDescription(d.description);
         setCover(d.coverUrl ? { uri: d.coverUrl } : null);
         setTags(d.tags);
+        // Cópia baixada cujo autor não permite republicar: trava o toggle.
+        if (isDownloadedCopy(d) && !canRepublish(d)) {
+          setLockedReason(
+            'Este deck foi baixado da comunidade e o autor não permite republicá-lo.',
+          );
+        }
       }
       setLoading(false);
     });
@@ -63,6 +75,7 @@ export default function EditDeckScreen() {
     void getPublishedFor(id).then(pub => {
       setIsPublic(pub != null);
       setWasPublic(pub != null);
+      if (pub?.license) setLicense(pub.license);
     });
   }, [id]);
 
@@ -104,19 +117,27 @@ export default function EditDeckScreen() {
         if (isPublic) {
           const fresh = await db.decks.getOne(id);
           if (fresh) {
-            await publishDeck(user.id, fresh, {
-              name: profile?.name ?? null,
-              avatarUrl: profile?.avatar_url ?? null,
-            });
+            await publishDeck(
+              user.id,
+              fresh,
+              {
+                name: profile?.name ?? null,
+                avatarUrl: profile?.avatar_url ?? null,
+              },
+              license,
+            );
           }
         } else if (wasPublic) {
           await unpublishDeck(id);
         }
       } catch (e) {
+        const msg = errorMessage(e, '');
         Alert.alert(
           'Comunidade',
-          'O deck foi salvo, mas não consegui atualizar a publicação. Rode o schema.sql atualizado no Supabase e tente de novo.\n\n' +
-            errorMessage(e, ''),
+          msg.includes(REPUBLISH_FORBIDDEN)
+            ? 'O deck foi salvo, mas não pode ser publicado: ele foi baixado da comunidade e o autor original não permite republicação.'
+            : 'O deck foi salvo, mas não consegui atualizar a publicação. Rode o schema.sql atualizado no Supabase e tente de novo.\n\n' +
+                msg,
         );
       }
 
@@ -183,7 +204,13 @@ export default function EditDeckScreen() {
             <TagInput tags={tags} onChange={setTags} suggestions={allTags} />
 
             {/* Comunidade */}
-            <PublishToggle value={isPublic} onValueChange={setIsPublic} />
+            <PublishToggle
+              value={isPublic}
+              onValueChange={setIsPublic}
+              license={license}
+              onLicenseChange={setLicense}
+              lockedReason={lockedReason}
+            />
           </ScrollView>
         )}
       </KeyboardAvoidingView>

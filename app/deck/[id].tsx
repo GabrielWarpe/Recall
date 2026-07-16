@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import type { Deck, Flashcard, StudySession } from '@/types';
 import { db } from '@/services/database';
 import { exportDeck, exportCards, BackupError } from '@/services/backup';
+import { canExport } from '@/utils/community';
 import { getDueCards } from '@/services/ai';
 import { sessionAccuracy, STUDY_MODE_LABEL, STUDY_MODE_ICON } from '@/utils/stats';
 import { Button } from '@/components/ui/Button';
@@ -58,13 +59,18 @@ export default function DeckDetailScreen() {
   // Só cards de fato vencidos — cards novos não são "revisão pendente".
   const dueCount = getDueCards(deck).length;
 
+  const exportable = canExport(deck);
+
   const handleMenu = () => {
     const options: Parameters<typeof Alert.alert>[2] = [
       { text: 'Editar deck', onPress: () => router.push(`/deck/edit?id=${deck.id}`) },
-      { text: 'Exportar deck', onPress: () => void handleExport() },
     ];
-    if (deck.cards.length > 0) {
-      options.push({ text: 'Exportar cartões…', onPress: enterSelect });
+    // Exportação só quando permitido (cópia baixada pode ter export bloqueado).
+    if (exportable) {
+      options.push({ text: 'Exportar deck', onPress: () => void handleExport() });
+      if (deck.cards.length > 0) {
+        options.push({ text: 'Exportar cartões…', onPress: enterSelect });
+      }
     }
     options.push(
       { text: 'Excluir deck', style: 'destructive', onPress: handleDelete },
@@ -138,6 +144,22 @@ export default function DeckDetailScreen() {
 
   const Header = (
     <View>
+      {/* Atribuição: deck baixado da comunidade */}
+      {deck.origin != null && (
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() =>
+            router.push(`/community/${deck.origin!.communityDeckId}` as never)
+          }
+          className="flex-row items-center gap-1.5 mb-4"
+        >
+          <Ionicons name="download-outline" size={14} color={colors.outline} />
+          <Text className="text-outline font-inter-medium text-xs">
+            Baixado da comunidade · por {deck.origin.authorName ?? 'Anônimo'}
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {/* Descrição do deck */}
       {deck.description.length > 0 && (
         <Text className="text-on-surface-variant font-inter-regular text-sm leading-5 mb-4">

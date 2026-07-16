@@ -338,6 +338,99 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- ── Proteção anti-plágio: proveniência + licença ────────────────────────────
+-- Uma cópia baixada precisa saber DE ONDE veio e O QUE pode fazer, senão vira
+-- indistinguível de um deck autoral (plágio de um toque). Republicação é
+-- bloqueável no banco (trigger); exportação de arquivo só na UI (o usuário já
+-- tem os dados) — o schema reflete os dois níveis.
+
+-- Proveniência + CACHE das permissões no momento do download. Deck autoral =
+-- tudo NULL. Decks baixados ANTES desta migração ficam NULL → tratados como
+-- autorais/sem restrição (sem retro-bloqueio surpresa).
+alter table playlists add column if not exists origin_community_deck_id uuid;
+alter table playlists add column if not exists origin_author_id uuid;
+alter table playlists add column if not exists origin_author_name text;
+alter table playlists add column if not exists origin_allow_export boolean;
+alter table playlists add column if not exists origin_allow_redistribute boolean;
+
+-- Licença do deck publicado (o `default 'protected'` faz o backfill dos decks
+-- já publicados para o modo mais fechado; o autor reabre republicando).
+alter table community_decks add column if not exists license text not null default 'protected';
+alter table community_decks add column if not exists allow_export boolean not null default false;
+alter table community_decks add column if not exists allow_redistribute boolean not null default false;
+-- Crédito imutável ao autor da RAIZ da cadeia (derivados republicados o herdam).
+alter table community_decks add column if not exists original_author_id uuid;
+alter table community_decks add column if not exists original_author_name text;
+
+alter table community_decks drop constraint if exists community_decks_license_check;
+alter table community_decks add constraint community_decks_license_check
+  check (license in ('protected', 'shareable', 'open'));
+
+-- Enforcement HARD: bloqueia republicação de cópia baixada protegida e força o
+-- crédito ao autor original em derivados permitidos. BEFORE para poder MUTAR a
+-- linha (a RLS só sabe permitir/negar, não conseguiria forçar o crédito).
+create or replace function public.enforce_deck_provenance()
+returns trigger as $$
+declare
+  src record;
+begin
+  if new.source_playlist_id is null then
+    return new; -- sem deck de trabalho vinculado: nada a herdar/checar.
+  end if;
+
+  select origin_community_deck_id, origin_author_id, origin_author_name,
+         origin_allow_redistribute
+    into src
+    from playlists
+    where id = new.source_playlist_id;
+
+  -- Playlist autoral (sem origem): publica normal.
+  if not found or src.origin_community_deck_id is null then
+    return new;
+  end if;
+
+  -- Cópia baixada cujo autor NÃO permite redistribuição: proibido republicar.
+  if coalesce(src.origin_allow_redistribute, false) = false then
+    raise exception 'REPUBLISH_FORBIDDEN: deck baixado cujo autor não permite redistribuição'
+      using errcode = 'check_violation';
+  end if;
+
+  -- Derivado permitido: crédito ao autor original é obrigatório e não-removível
+  -- (reaplicado a cada republish, sobrescrevendo qualquer tentativa de burla).
+  new.original_author_id := coalesce(src.origin_author_id, new.original_author_id);
+  new.original_author_name := coalesce(src.origin_author_name, new.original_author_name);
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists trg_enforce_deck_provenance on community_decks;
+create trigger trg_enforce_deck_provenance
+  before insert or update on community_decks
+  for each row execute procedure public.enforce_deck_provenance();
+
+-- ── Denúncias (moderação) ────────────────────────────────────────────────────
+create table if not exists deck_reports (
+  id uuid default gen_random_uuid() primary key,
+  community_deck_id uuid references community_decks(id) on delete cascade not null,
+  reporter_id uuid references profiles(id) on delete cascade not null,
+  reason text not null check (reason in ('plagiarism', 'inappropriate', 'spam', 'other')),
+  detail text,
+  created_at timestamp with time zone default now(),
+  unique (community_deck_id, reporter_id)
+);
+
+alter table deck_reports enable row level security;
+
+drop policy if exists "Users insert own reports" on deck_reports;
+create policy "Users insert own reports" on deck_reports
+  for insert to authenticated with check (reporter_id = auth.uid());
+
+drop policy if exists "Users read own reports" on deck_reports;
+create policy "Users read own reports" on deck_reports
+  for select to authenticated using (reporter_id = auth.uid());
+
+notify pgrst, 'reload schema';
+
 -- ── Storage: imagens dos flashcards ──
 -- Bucket público para leitura (URLs permanentes nos cards, inclusive em decks
 -- compartilhados); escrita/atualização apenas na pasta do próprio usuário.

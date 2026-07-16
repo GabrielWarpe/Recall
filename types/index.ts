@@ -20,6 +20,19 @@ export interface Flashcard {
   quizOptions: string[];
 }
 
+/**
+ * Proveniência de um deck baixado da comunidade. `null` no domínio Deck = deck
+ * autoral (criado pelo próprio usuário). O cache de permissões (`allowExport`/
+ * `allowRedistribute`) é o da licença no momento do download.
+ */
+export interface DeckOrigin {
+  communityDeckId: string;
+  authorId: string | null;
+  authorName: string | null;
+  allowExport: boolean;
+  allowRedistribute: boolean;
+}
+
 export interface Deck {
   id: string;
   title: string;
@@ -32,6 +45,8 @@ export interface Deck {
   cards: Flashcard[];
   createdAt: string;
   lastStudied?: string;
+  /** null = deck autoral; preenchido quando foi baixado da comunidade. */
+  origin: DeckOrigin | null;
 }
 
 /**

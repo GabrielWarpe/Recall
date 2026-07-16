@@ -23,6 +23,7 @@ import { errorMessage } from '@/utils/errors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDecks } from '@/hooks/useDecks';
 import { publishDeck } from '@/services/community';
+import type { DeckLicense } from '@/types/db';
 import { DeckCoverPicker } from '@/components/DeckCoverPicker';
 import { PublishToggle } from '@/components/PublishToggle';
 import { Input } from '@/components/ui/Input';
@@ -53,6 +54,7 @@ export default function CreateDeckScreen() {
   const [cover, setCover] = useState<CardImage | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(false);
+  const [license, setLicense] = useState<DeckLicense>('protected');
 
   // Tags já usadas nos outros decks, como sugestão de 1 toque.
   const allTags = [...new Set(decks.flatMap(d => d.tags))].sort((a, b) =>
@@ -162,10 +164,15 @@ export default function CreateDeckScreen() {
       // Publica na comunidade se pedido (o deck já existe com seus cards).
       if (isPublic && created) {
         try {
-          await publishDeck(user.id, created, {
-            name: profile?.name ?? null,
-            avatarUrl: profile?.avatar_url ?? null,
-          });
+          await publishDeck(
+            user.id,
+            created,
+            {
+              name: profile?.name ?? null,
+              avatarUrl: profile?.avatar_url ?? null,
+            },
+            license,
+          );
         } catch (e) {
           Alert.alert(
             'Comunidade',
@@ -244,7 +251,12 @@ export default function CreateDeckScreen() {
           />
 
           {/* Comunidade */}
-          <PublishToggle value={isPublic} onValueChange={setIsPublic} />
+          <PublishToggle
+            value={isPublic}
+            onValueChange={setIsPublic}
+            license={license}
+            onLicenseChange={setLicense}
+          />
 
           {/* Mode tabs */}
           <View className="bg-surface-container-high rounded-card p-1 flex-row">

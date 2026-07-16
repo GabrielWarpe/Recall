@@ -46,6 +46,16 @@ function rowsToDeck(playlist: PlaylistRow, cards: FlashcardRow[]): Deck {
     cards: cards.map(rowToFlashcard),
     createdAt: playlist.created_at,
     lastStudied: playlist.last_studied_at ?? undefined,
+    // Proveniência: só existe quando o deck foi baixado da comunidade.
+    origin: playlist.origin_community_deck_id
+      ? {
+          communityDeckId: playlist.origin_community_deck_id,
+          authorId: playlist.origin_author_id ?? null,
+          authorName: playlist.origin_author_name ?? null,
+          allowExport: playlist.origin_allow_export ?? false,
+          allowRedistribute: playlist.origin_allow_redistribute ?? false,
+        }
+      : null,
   };
 }
 
@@ -151,10 +161,20 @@ export const db = {
         | 'tags'
         | 'cover_url'
         | 'description'
+        | 'origin_community_deck_id'
+        | 'origin_author_id'
+        | 'origin_author_name'
+        | 'origin_allow_export'
+        | 'origin_allow_redistribute'
       > & {
         tags?: string[];
         cover_url?: string | null;
         description?: string | null;
+        origin_community_deck_id?: string;
+        origin_author_id?: string | null;
+        origin_author_name?: string | null;
+        origin_allow_export?: boolean;
+        origin_allow_redistribute?: boolean;
       },
     ): Promise<PlaylistRow> {
       const { data: row, error } = await supabase
@@ -546,6 +566,12 @@ export const db = {
         tags?: string[];
         coverUrl?: string | null;
         description?: string | null;
+        // Proveniência (só no download da comunidade).
+        originCommunityDeckId?: string;
+        originAuthorId?: string | null;
+        originAuthorName?: string | null;
+        originAllowExport?: boolean;
+        originAllowRedistribute?: boolean;
       },
       cards: NewCardInput[],
     ): Promise<Deck> {
@@ -561,6 +587,21 @@ export const db = {
         ...(meta.tags !== undefined ? { tags: meta.tags } : {}),
         ...(meta.coverUrl !== undefined ? { cover_url: meta.coverUrl } : {}),
         ...(meta.description ? { description: meta.description } : {}),
+        ...(meta.originCommunityDeckId !== undefined
+          ? { origin_community_deck_id: meta.originCommunityDeckId }
+          : {}),
+        ...(meta.originAuthorId !== undefined
+          ? { origin_author_id: meta.originAuthorId }
+          : {}),
+        ...(meta.originAuthorName !== undefined
+          ? { origin_author_name: meta.originAuthorName }
+          : {}),
+        ...(meta.originAllowExport !== undefined
+          ? { origin_allow_export: meta.originAllowExport }
+          : {}),
+        ...(meta.originAllowRedistribute !== undefined
+          ? { origin_allow_redistribute: meta.originAllowRedistribute }
+          : {}),
       };
 
       let playlist;
@@ -572,7 +613,7 @@ export const db = {
         const msg = (e as { message?: string } | null)?.message ?? '';
         if (
           Object.keys(optional).length > 0 &&
-          /tags|cover_url|description/i.test(msg)
+          /tags|cover_url|description|origin_/i.test(msg)
         ) {
           console.warn(
             '[Blink] Deck criado SEM capa/tags: o banco não tem as colunas novas. ' +

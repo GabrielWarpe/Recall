@@ -1,10 +1,13 @@
 import { supabase } from './supabase';
 import { db } from './database';
+import { presetFor } from '@/utils/community';
 import type { Deck } from '@/types';
 import type {
   CommunityDeckRow,
   CommunityCardRow,
   DeckRatingRow,
+  DeckLicense,
+  ReportReason,
 } from '@/types/db';
 
 /**
@@ -89,11 +92,16 @@ export async function getPublishedFor(
  * Publica (ou republica) o deck de trabalho como snapshot. Republicar mantém
  * o mesmo id publicado — logo, avaliações e downloads são preservados.
  */
+/** Erro lançado quando o banco recusa republicar um deck baixado protegido. */
+export const REPUBLISH_FORBIDDEN = 'REPUBLISH_FORBIDDEN';
+
 export async function publishDeck(
   userId: string,
   deck: Deck,
   author: PublicIdentity,
+  license: DeckLicense = 'protected',
 ): Promise<string> {
+  const preset = presetFor(license);
   const meta = {
     author_id: userId,
     source_playlist_id: deck.id,
@@ -104,18 +112,32 @@ export async function publishDeck(
     card_count: deck.cards.length,
     author_name: author.name,
     author_avatar_url: author.avatarUrl,
+    license,
+    allow_export: preset.allowExport,
+    allow_redistribute: preset.allowRedistribute,
+    // original_author_* é preenchido pelo trigger enforce_deck_provenance.
     updated_at: new Date().toISOString(),
   };
 
   const existing = await getPublishedFor(deck.id);
   let communityDeckId: string;
 
+  // O trigger enforce_deck_provenance recusa republicar cópia baixada protegida
+  // com a mensagem REPUBLISH_FORBIDDEN — traduz para um erro tipado.
+  const guard = (error: { message?: string } | null) => {
+    if (!error) return;
+    if ((error.message ?? '').includes(REPUBLISH_FORBIDDEN)) {
+      throw new Error(REPUBLISH_FORBIDDEN);
+    }
+    throw error;
+  };
+
   if (existing) {
     const { error } = await supabase
       .from('community_decks')
       .update(meta)
       .eq('id', existing.id);
-    if (error) throw error;
+    guard(error);
     communityDeckId = existing.id;
     // Substitui os cards do snapshot pelos atuais.
     await supabase
@@ -128,8 +150,8 @@ export async function publishDeck(
       .insert(meta)
       .select('id')
       .single();
-    if (error) throw error;
-    communityDeckId = data.id as string;
+    guard(error);
+    communityDeckId = data!.id as string;
   }
 
   const cardRows = deck.cards.map((c, i) => ({
@@ -176,6 +198,13 @@ export async function downloadDeck(
       tags: full.deck.tags,
       coverUrl: full.deck.cover_url,
       description: full.deck.description,
+      // Proveniência + CACHE das permissões da licença no momento do download:
+      // a cópia sabe de onde veio e o que pode fazer, sem depender da origem.
+      originCommunityDeckId: communityDeckId,
+      originAuthorId: full.deck.author_id,
+      originAuthorName: full.deck.author_name,
+      originAllowExport: full.deck.allow_export,
+      originAllowRedistribute: full.deck.allow_redistribute,
     },
     full.cards.map(c => ({
       front: c.front,
@@ -249,6 +278,27 @@ export async function rateDeck(params: {
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'community_deck_id,user_id' },
+  );
+  if (error) throw error;
+}
+
+// ── Denúncia ─────────────────────────────────────────────────────────────────
+
+/** Registra uma denúncia de um deck da comunidade (uma por usuário por deck). */
+export async function reportDeck(params: {
+  communityDeckId: string;
+  userId: string;
+  reason: ReportReason;
+  detail?: string | null;
+}): Promise<void> {
+  const { error } = await supabase.from('deck_reports').upsert(
+    {
+      community_deck_id: params.communityDeckId,
+      reporter_id: params.userId,
+      reason: params.reason,
+      detail: params.detail ?? null,
+    },
+    { onConflict: 'community_deck_id,reporter_id' },
   );
   if (error) throw error;
 }
