@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -25,76 +25,71 @@ const QUIZ_HERO_HEIGHT_RATIO = 0.42;
 interface QuizQuestionProps {
   card: Flashcard;
   /**
-   * Identidade única da pergunta na sessão (ex.: `${card.id}:${done}:${again}`).
-   * O componente deve ser renderizado SEM prop `key` — a troca de pergunta é
-   * comunicada por esta prop, e os guards anti-toque-duplo sobrevivem.
+   * Seed da sessão: a ordem das alternativas é derivada de card+seed e fica
+   * ESTÁVEL — voltar a uma questão respondida reexibe a mesma ordem, então o
+   * índice salvo aponta para a alternativa certa.
    */
-  questionKey: string;
-  /** true quando esta é a última pergunta da sessão ("Ver resultado"). */
-  isLast: boolean;
+  seed: number;
+  /** Alternativa já escolhida (salva na sessão); null = sem resposta. */
+  savedIndex: number | null;
+  /** Última posição da sequência → o botão vira "Finalizar". */
+  isLastPosition: boolean;
   /** Aviso destacado acima da pergunta (ex.: "Tempo esgotado"). */
   notice?: string;
-  /** Disparado ao confirmar em "Próxima" — o pai converte em grade SM-2. */
-  onAnswer: (correct: boolean) => void;
-  onSkip: () => void;
+  /** Escolha confirmada: registra a resposta (correct + índice) na sessão. */
+  onSelect: (correct: boolean, index: number) => void;
+  /** "Trocar resposta": limpa a resposta salva desta questão. */
+  onClearAnswer: () => void;
+  /** Navegação livre. */
+  onPrev: () => void;
+  onNext: () => void;
+  onFinish: () => void;
+  canPrev: boolean;
 }
 
 /**
- * Uma pergunta de quiz completa (imagem, enunciado, alternativas com
- * feedback, Próxima/Pular). Usada pela tela de quiz e pelo modo misto do
- * estudo. Toda a decisão de fila/SM-2 fica no pai, via `onAnswer`.
+ * Uma pergunta de quiz completa (imagem, enunciado, alternativas com feedback
+ * e navegação Anterior/Próxima). CONTROLADA: a resposta vive na sessão
+ * (`savedIndex`), então revisitar a questão mostra a escolha marcada e o
+ * usuário pode trocá-la. Usada pela tela de quiz e pelo modo misto do estudo.
  */
 export function QuizQuestion({
   card,
-  questionKey,
-  isLast,
+  seed,
+  savedIndex,
+  isLastPosition,
   notice,
-  onAnswer,
-  onSkip,
+  onSelect,
+  onClearAnswer,
+  onPrev,
+  onNext,
+  onFinish,
+  canPrev,
 }: QuizQuestionProps) {
   const colors = useThemeColors();
   const { settings } = useSettings();
   const { height: screenHeight } = useWindowDimensions();
 
-  // A resposta fica AMARRADA à pergunta em que foi dada (questionKey). Assim
-  // uma seleção antiga nunca "vaza" para a pergunta seguinte, mesmo com
-  // toques rápidos ou re-renderizações fora de ordem.
-  const [answer, setAnswer] = useState<{ key: string; index: number } | null>(
-    null,
-  );
+  // Ordem estável por card+seed (ver doc da prop `seed`).
+  const options = useMemo(() => buildOptions(card, seed), [card.id, seed]);
+
   // Alternativas eliminadas pelo usuário — apoio VISUAL apenas: riscar não
-  // bloqueia responder e não entra em nenhum cálculo de acerto. Amarrado ao
-  // questionKey (como `answer`), então some sozinho ao trocar de pergunta.
-  const [struck, setStruck] = useState<{ key: string; indexes: number[] }>({
-    key: '',
+  // bloqueia responder e não entra em nenhum cálculo. Amarrado ao card.
+  const [struck, setStruck] = useState<{ id: string; indexes: number[] }>({
+    id: '',
     indexes: [],
   });
-  // Momento do último avanço: ignora toques "atravessados" logo em seguida
-  // (toque duplo no Próxima cairia sobre uma alternativa da pergunta nova).
-  const advancedAtRef = useRef(0);
-  // Última pergunta avaliada: impede avaliar a mesma pergunta duas vezes.
-  const gradedKeyRef = useRef('');
+  const struckIndexes = struck.id === card.id ? struck.indexes : [];
 
-  const options = useMemo(
-    () => buildOptions(card),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [questionKey],
-  );
-
-  // Só vale a resposta dada NESTA pergunta; a de perguntas anteriores é nula.
-  const selectedIndex = answer?.key === questionKey ? answer.index : null;
-  const answered = selectedIndex !== null;
+  const answered = savedIndex != null;
   const answeredCorrectly =
-    answered && (options[selectedIndex]?.isCorrect ?? false);
-
-  // Idem para os riscos: os de perguntas anteriores não valem.
-  const struckIndexes = struck.key === questionKey ? struck.indexes : [];
+    answered && (options[savedIndex]?.isCorrect ?? false);
 
   const toggleStrike = (index: number) => {
     setStruck(prev => {
-      const current = prev.key === questionKey ? prev.indexes : [];
+      const current = prev.id === card.id ? prev.indexes : [];
       return {
-        key: questionKey,
+        id: card.id,
         indexes: current.includes(index)
           ? current.filter(i => i !== index)
           : [...current, index],
@@ -104,34 +99,15 @@ export function QuizQuestion({
 
   const handleSelect = (index: number) => {
     if (answered) return;
-    // Toque logo após avançar = provável toque duplo no "Próxima"; ignora.
-    if (Date.now() - advancedAtRef.current < 300) return;
-    setAnswer({ key: questionKey, index });
+    const correct = options[index]?.isCorrect ?? false;
     if (settings.feedbackSounds) {
       void Haptics.notificationAsync(
-        options[index]?.isCorrect
+        correct
           ? Haptics.NotificationFeedbackType.Success
           : Haptics.NotificationFeedbackType.Warning,
       );
     }
-  };
-
-  // Aplica a avaliação só ao avançar, para o feedback ficar visível antes.
-  const handleNext = () => {
-    if (selectedIndex === null) return;
-    if (gradedKeyRef.current === questionKey) return; // toque duplo
-    gradedKeyRef.current = questionKey;
-    advancedAtRef.current = Date.now();
-    const correct = options[selectedIndex]?.isCorrect ?? false;
-    setAnswer(null);
-    onAnswer(correct);
-  };
-
-  const handleSkip = () => {
-    if (Date.now() - advancedAtRef.current < 300) return;
-    advancedAtRef.current = Date.now();
-    setAnswer(null);
-    onSkip();
+    onSelect(correct, index);
   };
 
   return (
@@ -141,7 +117,7 @@ export function QuizQuestion({
       showsVerticalScrollIndicator={false}
     >
       {/* Aviso (ex.: tempo esgotado). Não bloqueia nada — a questão em tela
-          ainda pode ser respondida ou pulada. */}
+          ainda pode ser respondida. */}
       {notice != null && <TimeUpNotice message={notice} />}
 
       {/* Imagem-destaque (só a primeira, se o card tiver imagens) */}
@@ -173,7 +149,7 @@ export function QuizQuestion({
       {/* Alternativas */}
       <View className="gap-3">
         {options.map((opt, i) => {
-          const isSelected = selectedIndex === i;
+          const isSelected = savedIndex === i;
           const showCorrect = answered && opt.isCorrect;
           const showWrong = answered && isSelected && !opt.isCorrect;
           const dimmed = answered && !isSelected && !opt.isCorrect;
@@ -184,7 +160,7 @@ export function QuizQuestion({
             // toque em "riscar" dentro do Touchable da opção acabaria
             // respondendo a questão.
             <View
-              key={`${questionKey}:${i}`}
+              key={`${card.id}:${i}`}
               className={`flex-row items-center rounded-card border ${
                 showCorrect
                   ? 'bg-success/15 border-success'
@@ -258,9 +234,9 @@ export function QuizQuestion({
         })}
       </View>
 
-      {/* Feedback + ações */}
-      {answered ? (
-        <View className="gap-3 mt-1">
+      {/* Feedback + trocar resposta */}
+      {answered && (
+        <View className="gap-2">
           <Text
             className={`font-inter-semibold text-sm text-center ${
               answeredCorrectly ? 'text-success' : 'text-error'
@@ -270,24 +246,57 @@ export function QuizQuestion({
               ? '✓ Correto!'
               : '✗ Incorreto — a resposta certa está destacada.'}
           </Text>
-          <Button variant="primary" size="lg" onPress={handleNext}>
-            {isLast ? 'Ver resultado' : 'Próxima'}
-          </Button>
+          <TouchableOpacity
+            onPress={onClearAnswer}
+            activeOpacity={0.7}
+            className="py-1 items-center"
+          >
+            <Text className="text-outline font-inter-medium text-sm">
+              Trocar resposta
+            </Text>
+          </TouchableOpacity>
         </View>
-      ) : (
-        <TouchableOpacity
-          onPress={handleSkip}
-          activeOpacity={0.7}
-          className="py-2 flex-row items-center justify-center gap-1.5"
-        >
-          <Ionicons
-            name="play-skip-forward-outline"
-            size={16}
-            color={colors.outline}
-          />
-          <Text className="text-outline font-inter-medium text-sm">Pular</Text>
-        </TouchableOpacity>
       )}
+
+      {/* Navegação livre: voltar/avançar sem responder; sem resposta = tratado
+          no Finalizar (modal de questões sem resposta). */}
+      <View className="flex-row gap-3">
+        <TouchableOpacity
+          onPress={onPrev}
+          disabled={!canPrev}
+          activeOpacity={0.7}
+          className="flex-1 h-13 rounded-3xl flex-row items-center justify-center gap-1.5 border py-3.5"
+          style={{
+            borderColor: colors.outlineVariant,
+            opacity: canPrev ? 1 : 0.4,
+          }}
+        >
+          <Ionicons name="chevron-back" size={18} color={colors.onSurface} />
+          <Text className="text-on-surface font-inter-semibold text-sm">
+            Anterior
+          </Text>
+        </TouchableOpacity>
+
+        {isLastPosition ? (
+          <View className="flex-1">
+            <Button variant="primary" size="md" onPress={onFinish}>
+              Finalizar
+            </Button>
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={onNext}
+            activeOpacity={0.7}
+            className="flex-1 h-13 rounded-3xl flex-row items-center justify-center gap-1.5 border py-3.5"
+            style={{ borderColor: colors.outlineVariant }}
+          >
+            <Text className="text-on-surface font-inter-semibold text-sm">
+              Próxima
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.onSurface} />
+          </TouchableOpacity>
+        )}
+      </View>
     </ScrollView>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -17,8 +17,9 @@ import type { Deck, Flashcard } from '@/types';
 import { db } from '@/services/database';
 import { useStudySession } from '@/hooks/useStudySession';
 import { useTimedSession } from '@/hooks/useTimedSession';
+import { useFinishPrompt } from '@/hooks/useFinishPrompt';
 import { useSettings } from '@/contexts/SettingsContext';
-import { checkAnswer, type AnswerVerdict } from '@/utils/answer';
+import { checkAnswer } from '@/utils/answer';
 import { Button } from '@/components/ui/Button';
 import { CardImages } from '@/components/CardImages';
 import { SessionTimer } from '@/components/SessionTimer';
@@ -32,14 +33,6 @@ function shuffle<T>(arr: T[]): T[] {
   return [...arr].sort(() => Math.random() - 0.5);
 }
 
-/** Resultado da pergunta atual, amarrado à identidade dela (como no quiz). */
-interface WriteResult {
-  key: string;
-  verdict: AnswerVerdict | 'idk';
-  input: string;
-  overridden?: boolean;
-}
-
 export default function WriteScreen() {
   const { deckId } = useLocalSearchParams<{ deckId: string }>();
   const router = useRouter();
@@ -50,11 +43,10 @@ export default function WriteScreen() {
   const session = useStudySession(deck, 'write');
   // Cronômetro + tela de início: mesma lógica de todos os modos.
   const timed = useTimedSession(session);
+  // Modal "questões sem resposta" ao finalizar.
+  useFinishPrompt(session);
 
   const [draft, setDraft] = useState('');
-  const [result, setResult] = useState<WriteResult | null>(null);
-  const advancedAtRef = useRef(0);
-  const gradedKeyRef = useRef('');
 
   useEffect(() => {
     if (!deckId) return;
@@ -71,17 +63,15 @@ export default function WriteScreen() {
   }, [deck, timed.started, timed.pending, timed.prepare]);
 
   const currentCard: Flashcard | null = session.currentCard;
-  const questionKey = currentCard
-    ? `${currentCard.id}:${session.done}:${session.againCount}`
-    : '';
 
-  // Só vale o resultado desta pergunta.
-  const currentResult = result?.key === questionKey ? result : null;
-  const isCorrect =
-    currentResult != null &&
-    (currentResult.verdict === 'exact' ||
-      currentResult.verdict === 'typo' ||
-      currentResult.overridden === true);
+  // Rascunho zera ao trocar de questão (a resposta salva vem da sessão).
+  useEffect(() => {
+    setDraft('');
+  }, [currentCard?.id]);
+
+  // Resposta salva desta questão — a navegação livre restaura tudo daqui.
+  const saved = session.currentAnswer;
+  const isCorrect = saved?.correct === true;
 
   if (!deck) return null;
 
@@ -114,26 +104,26 @@ export default function WriteScreen() {
   }
 
   const handleVerify = () => {
-    if (!currentCard || currentResult != null) return;
+    if (!currentCard || saved != null) return;
     const input = draft.trim();
     if (input.length === 0) return;
     Keyboard.dismiss();
     const verdict = checkAnswer(input, currentCard.back);
-    setResult({ key: questionKey, verdict, input });
+    const correct = verdict === 'exact' || verdict === 'typo';
+    session.answer(correct, { typed: input, typedVerdict: verdict });
     if (settings.feedbackSounds) {
       void Haptics.notificationAsync(
-        verdict === 'wrong'
-          ? Haptics.NotificationFeedbackType.Warning
-          : Haptics.NotificationFeedbackType.Success,
+        correct
+          ? Haptics.NotificationFeedbackType.Success
+          : Haptics.NotificationFeedbackType.Warning,
       );
     }
   };
 
   const handleDontKnow = () => {
-    if (!currentCard || currentResult != null) return;
-    if (Date.now() - advancedAtRef.current < 300) return;
+    if (!currentCard || saved != null) return;
     Keyboard.dismiss();
-    setResult({ key: questionKey, verdict: 'idk', input: draft.trim() });
+    session.answer(false, { typed: draft.trim(), typedVerdict: 'idk' });
     if (settings.feedbackSounds) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
@@ -141,42 +131,32 @@ export default function WriteScreen() {
 
   // "Na verdade acertei" — para sinônimos/formulações equivalentes.
   const handleOverride = () => {
-    if (!currentResult || currentResult.verdict !== 'wrong') return;
-    setResult({ ...currentResult, overridden: true });
+    if (!saved || saved.typedVerdict !== 'wrong' || saved.typedOverridden) return;
+    session.answer(true, { ...saved, typedOverridden: true });
   };
 
-  const handleNext = () => {
-    if (!currentCard || !currentResult) return;
-    if (gradedKeyRef.current === questionKey) return; // toque duplo
-    gradedKeyRef.current = questionKey;
-    advancedAtRef.current = Date.now();
-    setResult(null);
-    setDraft('');
-    // Acertou ou errou (uma passada).
-    session.answer(isCorrect);
+  // "Trocar resposta": limpa a salva e devolve o texto ao campo para editar.
+  const handleChangeAnswer = () => {
+    if (!saved) return;
+    setDraft(saved.typed ?? '');
+    session.clearAnswer();
   };
 
-  // Pula o card sem responder — conta como "Pulou" no resultado.
-  const handleSkip = () => {
-    if (!currentCard || currentResult != null) return;
-    if (Date.now() - advancedAtRef.current < 300) return;
-    advancedAtRef.current = Date.now();
-    Keyboard.dismiss();
-    setDraft('');
-    session.skip();
+  // Finalizar: tempo esgotado → sem modal (sem resposta viram Puladas);
+  // senão o fluxo normal (modal quando há questões sem resposta).
+  const handleFinish = () => {
+    if (timed.expired) session.leaveUnanswered();
+    else session.finish();
   };
 
-  // 'all' = praticar o deck inteiro de novo; 'wrong' = só as que errei nesta
-  // sessão. Os ids errados são lidos ANTES do reset (que os limpa) e a
+  // 'all' = praticar o deck inteiro de novo; 'wrong' = só as que não entendi
+  // nesta sessão. Os ids são lidos ANTES do reset (que os limpa) e a
   // preparação síncrona evita a corrida com o auto-prepare.
   const restart = (scope: 'all' | 'wrong') => {
     const wrong = session.wrongIds;
     const cards =
       scope === 'wrong' ? deck.cards.filter(c => wrong.has(c.id)) : deck.cards;
-    setResult(null);
     setDraft('');
-    advancedAtRef.current = 0;
-    gradedKeyRef.current = '';
     timed.resetTimed();
     timed.prepare(shuffle(cards));
   };
@@ -221,9 +201,8 @@ export default function WriteScreen() {
   }
 
   // ── Pergunta ativa ───────────────────────────────────────────────────────
+  // Progresso = questões RESPONDIDAS (a posição anda livre com Anterior/Próxima).
   const progress = session.total > 0 ? session.done / session.total : 0;
-  const position = Math.min(session.done + 1, session.total);
-  const isLast = session.total - session.done === 1;
 
   return (
     <SafeAreaView className="flex-1 bg-background">
@@ -243,10 +222,15 @@ export default function WriteScreen() {
             >
               {deck.title}
             </Text>
+            {session.inRedoRound && (
+              <Text className="text-tertiary font-inter-medium text-xs text-center">
+                Refazendo as sem resposta
+              </Text>
+            )}
           </View>
           <View className="items-end gap-0.5">
             <Text className="text-outline font-inter-regular text-xs">
-              {position}/{session.total}
+              {session.position}/{session.sequenceLength}
             </Text>
             {/* Cronômetro desligado ou oculto → sem mostrador. Oculto, o tempo
                 continua correndo e sendo gravado (a medição vive na sessão). */}
@@ -279,7 +263,7 @@ export default function WriteScreen() {
             showsVerticalScrollIndicator={false}
           >
             {/* Tempo esgotado: este card ainda vale; a sessão encerra depois
-                de respondê-lo ou pulá-lo. */}
+                de respondê-lo. */}
             {timed.expired && <TimeUpNotice />}
 
             {/* Pergunta */}
@@ -297,11 +281,11 @@ export default function WriteScreen() {
               )}
             </View>
 
-            {currentResult == null ? (
+            {saved == null ? (
               <>
                 {/* Campo de resposta */}
                 <TextInput
-                  key={questionKey}
+                  key={currentCard.id}
                   value={draft}
                   onChangeText={setDraft}
                   onSubmitEditing={handleVerify}
@@ -322,35 +306,19 @@ export default function WriteScreen() {
                 >
                   Verificar
                 </Button>
-                <View className="flex-row items-center justify-center gap-6">
-                  <TouchableOpacity
-                    onPress={handleDontKnow}
-                    activeOpacity={0.7}
-                    className="py-1"
-                  >
-                    <Text className="text-outline font-inter-medium text-sm">
-                      Não sei
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={handleSkip}
-                    activeOpacity={0.7}
-                    className="py-1 flex-row items-center gap-1.5"
-                  >
-                    <Ionicons
-                      name="play-skip-forward-outline"
-                      size={15}
-                      color={colors.outline}
-                    />
-                    <Text className="text-outline font-inter-medium text-sm">
-                      Pular
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  onPress={handleDontKnow}
+                  activeOpacity={0.7}
+                  className="py-1 items-center"
+                >
+                  <Text className="text-outline font-inter-medium text-sm">
+                    Não sei
+                  </Text>
+                </TouchableOpacity>
               </>
             ) : (
               <>
-                {/* Feedback */}
+                {/* Feedback (restaurado da sessão ao revisitar a questão) */}
                 <View
                   className={`rounded-card p-4 border ${
                     isCorrect
@@ -363,45 +331,95 @@ export default function WriteScreen() {
                       isCorrect ? 'text-success' : 'text-error'
                     }`}
                   >
-                    {currentResult.overridden
+                    {saved.typedOverridden
                       ? '✓ Marcado como certo'
-                      : currentResult.verdict === 'exact'
+                      : saved.typedVerdict === 'exact'
                         ? '✓ Correto!'
-                        : currentResult.verdict === 'typo'
+                        : saved.typedVerdict === 'typo'
                           ? '✓ Quase perfeito — só um errinho de digitação'
-                          : currentResult.verdict === 'idk'
+                          : saved.typedVerdict === 'idk'
                             ? 'Sem problema — a resposta era:'
                             : '✗ Não foi dessa vez. A resposta era:'}
                   </Text>
                   <Text className="text-on-surface font-jakarta-bold text-base mt-2 leading-6">
                     {currentCard.back}
                   </Text>
-                  {currentResult.verdict === 'wrong' &&
-                    currentResult.input.length > 0 && (
+                  {saved.typedVerdict === 'wrong' &&
+                    (saved.typed?.length ?? 0) > 0 && (
                       <Text className="text-outline font-inter-regular text-xs mt-2">
-                        Você escreveu: “{currentResult.input}”
+                        Você escreveu: “{saved.typed}”
                       </Text>
                     )}
                 </View>
 
-                {currentResult.verdict === 'wrong' &&
-                  !currentResult.overridden && (
+                <View className="flex-row items-center justify-center gap-6">
+                  {saved.typedVerdict === 'wrong' && !saved.typedOverridden && (
                     <TouchableOpacity
                       onPress={handleOverride}
                       activeOpacity={0.7}
-                      className="py-1 items-center"
+                      className="py-1"
                     >
                       <Text className="text-primary font-inter-medium text-sm">
                         Minha resposta estava certa
                       </Text>
                     </TouchableOpacity>
                   )}
-
-                <Button variant="primary" size="lg" onPress={handleNext}>
-                  {isLast ? 'Ver resultado' : 'Próxima'}
-                </Button>
+                  <TouchableOpacity
+                    onPress={handleChangeAnswer}
+                    activeOpacity={0.7}
+                    className="py-1"
+                  >
+                    <Text className="text-outline font-inter-medium text-sm">
+                      Trocar resposta
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </>
             )}
+
+            {/* Navegação livre: voltar/avançar sem responder; sem resposta =
+                tratado no Finalizar (modal de questões sem resposta). */}
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                onPress={session.prev}
+                disabled={!session.canPrev}
+                activeOpacity={0.7}
+                className="flex-1 rounded-3xl flex-row items-center justify-center gap-1.5 border py-3.5"
+                style={{
+                  borderColor: colors.outlineVariant,
+                  opacity: session.canPrev ? 1 : 0.4,
+                }}
+              >
+                <Ionicons name="chevron-back" size={18} color={colors.onSurface} />
+                <Text className="text-on-surface font-inter-semibold text-sm">
+                  Anterior
+                </Text>
+              </TouchableOpacity>
+
+              {session.isLastPosition || timed.expired ? (
+                <View className="flex-1">
+                  <Button variant="primary" size="md" onPress={handleFinish}>
+                    Finalizar
+                  </Button>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={session.next}
+                  activeOpacity={0.7}
+                  className="flex-1 rounded-3xl flex-row items-center justify-center gap-1.5 border py-3.5"
+                  style={{ borderColor: colors.outlineVariant }}
+                >
+                  <Text className="text-on-surface font-inter-semibold text-sm">
+                    Próxima
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={colors.onSurface}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
           </ScrollView>
         )}
       </KeyboardAvoidingView>

@@ -8,6 +8,7 @@ import { db } from '@/services/database';
 import { getSessionCards } from '@/services/ai';
 import { useStudySession } from '@/hooks/useStudySession';
 import { useTimedSession } from '@/hooks/useTimedSession';
+import { useFinishPrompt } from '@/hooks/useFinishPrompt';
 import { deckSupportsQuiz, cardSupportsQuiz } from '@/utils/practice';
 import { QuizQuestion } from '@/components/QuizQuestion';
 import { SessionTimer } from '@/components/SessionTimer';
@@ -27,6 +28,8 @@ export default function QuizScreen() {
   const session = useStudySession(deck, 'quiz');
   // Cronômetro + tela de início: mesma lógica de todos os modos.
   const timed = useTimedSession(session);
+  // Modal "questões sem resposta" ao finalizar.
+  useFinishPrompt(session);
 
 
   useEffect(() => {
@@ -170,18 +173,14 @@ export default function QuizScreen() {
 
   // ── Pergunta ativa ───────────────────────────────────────────────────────
   const currentCard = session.currentCard;
-  // Identidade única da pergunta atual (done/againCount avançam a cada card).
-  const questionKey = currentCard
-    ? `${currentCard.id}:${session.done}:${session.againCount}`
-    : '';
+  // Progresso = questões RESPONDIDAS (a posição anda livre com Anterior/Próxima).
   const progress = session.total > 0 ? session.done / session.total : 0;
-  const position = Math.min(session.done + 1, session.total);
-  const isLast = session.total - session.done === 1;
 
-  // Acertou ou errou (uma passada — o card sai da fila; o SM-2 o reagenda
-  // para outro dia se errar).
-  const handleAnswer = (correct: boolean) => {
-    session.answer(correct);
+  // Finalizar: tempo esgotado → sem modal (sem resposta viram Puladas);
+  // senão o fluxo normal (modal quando há questões sem resposta).
+  const handleFinish = () => {
+    if (timed.expired) session.leaveUnanswered();
+    else session.finish();
   };
 
   return (
@@ -198,10 +197,15 @@ export default function QuizScreen() {
           >
             {deck.title}
           </Text>
+          {session.inRedoRound && (
+            <Text className="text-tertiary font-inter-medium text-xs text-center">
+              Refazendo as sem resposta
+            </Text>
+          )}
         </View>
         <View className="items-end gap-0.5">
           <Text className="text-outline font-inter-regular text-xs">
-            {position}/{session.total}
+            {session.position}/{session.sequenceLength}
           </Text>
           {/* Cronômetro desligado ou oculto → sem mostrador. Oculto, o tempo
               continua correndo e sendo gravado (a medição vive na sessão). */}
@@ -227,15 +231,20 @@ export default function QuizScreen() {
       </View>
 
       {currentCard != null && (
-        // SEM prop `key`: a troca de pergunta é comunicada pelo questionKey e
-        // os guards anti-toque-duplo internos sobrevivem entre perguntas.
         <QuizQuestion
           card={currentCard}
-          questionKey={questionKey}
-          isLast={isLast || timed.expired}
+          seed={session.sessionSeed}
+          savedIndex={session.currentAnswer?.selectedIndex ?? null}
+          isLastPosition={session.isLastPosition || timed.expired}
           notice={timed.expired ? TIME_UP_MESSAGE : undefined}
-          onAnswer={handleAnswer}
-          onSkip={() => session.skip()}
+          onSelect={(correct, index) =>
+            session.answer(correct, { selectedIndex: index })
+          }
+          onClearAnswer={session.clearAnswer}
+          onPrev={session.prev}
+          onNext={session.next}
+          onFinish={handleFinish}
+          canPrev={session.canPrev}
         />
       )}
     </SafeAreaView>

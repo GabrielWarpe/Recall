@@ -8,7 +8,8 @@ import { db } from '@/services/database';
 import { getSessionCards } from '@/services/ai';
 import { useStudySession } from '@/hooks/useStudySession';
 import { useTimedSession } from '@/hooks/useTimedSession';
-import { deckSupportsQuiz, cardSupportsQuiz } from '@/utils/practice';
+import { useFinishPrompt } from '@/hooks/useFinishPrompt';
+import { deckSupportsQuiz, cardSupportsQuiz, hashStr } from '@/utils/practice';
 import { SwipeCard } from '@/components/SwipeCard';
 import { QuizQuestion } from '@/components/QuizQuestion';
 import { SessionTimer } from '@/components/SessionTimer';
@@ -17,13 +18,6 @@ import { SessionResult } from '@/components/SessionResult';
 import { TimeUpNotice, TIME_UP_MESSAGE } from '@/components/TimeUpNotice';
 import { Button } from '@/components/ui/Button';
 import { useThemeColors } from '@/hooks/useThemeColors';
-
-/** Hash determinístico (djb2) — sorteio de formato estável por pergunta. */
-function hashStr(s: string): number {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) h = (h * 33 + s.charCodeAt(i)) >>> 0;
-  return h;
-}
 
 export default function StudySessionScreen() {
   const { deckId, mode, mix } = useLocalSearchParams<{
@@ -46,6 +40,8 @@ export default function StudySessionScreen() {
   const session = useStudySession(deck, isMixed ? 'mixed' : 'flash');
   // Cronômetro + tela de início: mesma lógica de todos os modos.
   const timed = useTimedSession(session);
+  // Modal "questões sem resposta" ao finalizar.
+  useFinishPrompt(session);
 
   useEffect(() => {
     if (!deckId) return;
@@ -180,32 +176,27 @@ export default function StudySessionScreen() {
   }
 
   // ── Active study session ──────────────────────────────────────────────────
+  // Progresso = questões RESPONDIDAS (a posição anda livre com Anterior/Próximo).
   const progress = session.total > 0 ? session.done / session.total : 0;
   const DOT_COUNT = Math.min(session.total, 12);
-  const position = Math.min(session.done + 1, session.total);
 
-  // Identidade única da pergunta atual.
-  const questionKey = session.currentCard
-    ? `${session.currentCard.id}:${session.done}:${session.againCount}`
-    : '';
+  // Finalizar: tempo esgotado → sem modal (sem resposta viram Puladas);
+  // senão o fluxo normal (modal quando há questões sem resposta).
+  const handleFinish = () => {
+    if (timed.expired) session.leaveUnanswered();
+    else session.finish();
+  };
 
-  // Formato do card do topo no misto: alternado pela paridade de `done` (nº de
-  // cards já processados — uma passada, então cada card avança `done` em 1) ou
-  // sorteio estável por pergunta; card sem distrator cai para flashcard.
-  // Usar `done` em vez de um ref mutado no render deixa o "Desfazer" coerente:
-  // ao voltar, a paridade acompanha, sem dessincronizar a alternância.
+  // Formato do card no misto: ESTÁVEL por card (não muda ao navegar) —
+  // alternado pela paridade da posição no conjunto da sessão, ou sorteio
+  // determinístico por card+seed; card sem distrator cai para flashcard.
   const showAsQuiz =
     isMixed &&
     session.currentCard != null &&
     cardSupportsQuiz(session.currentCard) &&
     (mixPattern === 'alt'
-      ? session.done % 2 === 1
-      : hashStr(questionKey) % 2 === 1);
-
-  // Acertou ou errou (uma passada — o card sai da fila).
-  const handleQuizAnswer = (correct: boolean) => {
-    session.answer(correct);
-  };
+      ? session.cards.indexOf(session.currentCard) % 2 === 1
+      : (hashStr(session.currentCard.id) ^ session.sessionSeed) % 2 === 1);
 
   return (
     <SafeAreaView className="flex-1 bg-background">
@@ -221,10 +212,15 @@ export default function StudySessionScreen() {
           >
             {deck.title}
           </Text>
+          {session.inRedoRound && (
+            <Text className="text-tertiary font-inter-medium text-xs text-center">
+              Refazendo as sem resposta
+            </Text>
+          )}
         </View>
         <View className="items-end gap-0.5">
           <Text className="text-outline font-inter-regular text-xs">
-            {position}/{session.total}
+            {session.position}/{session.sequenceLength}
           </Text>
           {/* Cronômetro desligado ou oculto → sem mostrador. Oculto, o tempo
               continua correndo e sendo gravado (a medição vive na sessão). */}
@@ -276,35 +272,39 @@ export default function StudySessionScreen() {
 
       {/* Card area */}
       {showAsQuiz && session.currentCard != null ? (
-        // SEM prop `key`: a troca de pergunta é comunicada pelo questionKey e
-        // os guards anti-toque-duplo internos sobrevivem entre perguntas.
         <QuizQuestion
           card={session.currentCard}
-          questionKey={questionKey}
-          isLast={session.total - session.done === 1 || timed.expired}
+          seed={session.sessionSeed}
+          savedIndex={session.currentAnswer?.selectedIndex ?? null}
+          isLastPosition={session.isLastPosition || timed.expired}
           notice={timed.expired ? TIME_UP_MESSAGE : undefined}
-          onAnswer={handleQuizAnswer}
-          onSkip={() => session.skip()}
+          onSelect={(correct, index) =>
+            session.answer(correct, { selectedIndex: index })
+          }
+          onClearAnswer={session.clearAnswer}
+          onPrev={session.prev}
+          onNext={session.next}
+          onFinish={handleFinish}
+          canPrev={session.canPrev}
         />
       ) : (
         <View className="flex-1 items-center justify-center px-6">
           {/* Tempo esgotado: o card em tela ainda vale; a sessão encerra depois
-              de avaliá-lo ou pulá-lo. */}
+              de respondê-lo. */}
           {timed.expired && <TimeUpNotice className="mb-4 w-full" />}
           {session.currentCard != null && (
             <SwipeCard
-              key={
-                session.currentCard.id +
-                '_' +
-                (session.done + session.againCount)
-              }
+              key={session.currentCard.id}
               card={session.currentCard}
-              onAnswer={correct => session.answer(correct)}
-              onBack={() => session.back()}
-              canGoBack={session.canGoBack}
+              onAnswer={correct => session.answerAndAdvance(correct)}
+              onPrev={session.prev}
+              onNext={session.next}
+              canPrev={session.canPrev}
+              isLastPosition={session.isLastPosition}
+              onFinish={handleFinish}
+              savedCorrect={session.currentAnswer?.correct ?? null}
               wrongCount={session.againCount}
               rightCount={session.correctCount}
-              onSkip={() => session.skip()}
             />
           )}
         </View>

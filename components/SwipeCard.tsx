@@ -25,24 +25,32 @@ interface SwipeCardProps {
   card: Flashcard;
   /** Resposta binária: true = acertei, false = errei. */
   onAnswer: (correct: boolean) => void;
-  /** Desfaz a resposta anterior e volta ao card anterior. */
-  onBack: () => void;
-  /** Há resposta anterior para desfazer? */
-  canGoBack: boolean;
+  /** Navegação livre entre as questões. */
+  onPrev: () => void;
+  onNext: () => void;
+  canPrev: boolean;
+  /** Última posição → o "Próximo" vira "Finalizar". */
+  isLastPosition: boolean;
+  /** Finalizar a sessão (checa questões sem resposta na tela). */
+  onFinish: () => void;
+  /** Resposta já salva desta questão (revisita); null = sem resposta. */
+  savedCorrect: boolean | null;
   /** Contadores da sessão, exibidos dentro dos próprios botões. */
   wrongCount: number;
   rightCount: number;
-  onSkip: () => void;
 }
 
 export function SwipeCard({
   card,
   onAnswer,
-  onBack,
-  canGoBack,
+  onPrev,
+  onNext,
+  canPrev,
+  isLastPosition,
+  onFinish,
+  savedCorrect,
   wrongCount,
   rightCount,
-  onSkip,
 }: SwipeCardProps) {
   const { settings } = useSettings();
   const colors = useThemeColors();
@@ -209,6 +217,33 @@ export function SwipeCard({
 
       {/* Controles */}
       <View className="mt-6" style={{ width: CARD_WIDTH }}>
+        {/* Resposta salva (revisita): continua marcada e pode ser alterada
+            respondendo de novo. */}
+        {savedCorrect != null && (
+          <View
+            className="self-center flex-row items-center gap-1.5 rounded-pill px-3 py-1.5 mb-3 border"
+            style={{
+              borderColor:
+                (savedCorrect ? colors.success : colors.error) + '4D',
+              backgroundColor:
+                (savedCorrect ? colors.success : colors.error) + '14',
+            }}
+          >
+            <Ionicons
+              name={savedCorrect ? 'checkmark-circle' : 'close-circle'}
+              size={14}
+              color={savedCorrect ? colors.success : colors.error}
+            />
+            <Text
+              className="font-inter-semibold text-xs"
+              style={{ color: savedCorrect ? colors.success : colors.error }}
+            >
+              Você marcou: {savedCorrect ? 'Entendi' : 'Errei'} — responda de
+              novo para alterar
+            </Text>
+          </View>
+        )}
+
         {!isFlipped ? (
           <View className="gap-3">
             <TouchableOpacity
@@ -219,21 +254,6 @@ export function SwipeCard({
               <Ionicons name="sync-outline" size={18} color="#dffbf7" />
               <Text className="text-on-primary-container font-inter-semibold text-base">
                 Ver resposta
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={onSkip}
-              activeOpacity={0.7}
-              className="py-2 flex-row items-center justify-center gap-1.5"
-            >
-              <Ionicons
-                name="play-skip-forward-outline"
-                size={16}
-                color={colors.outline}
-              />
-              <Text className="text-outline font-inter-medium text-sm">
-                Pular
               </Text>
             </TouchableOpacity>
           </View>
@@ -312,21 +332,41 @@ export function SwipeCard({
           </View>
         )}
 
-        {/* Desfazer: fora do bloco condicional, então fica acessível ANTES de
-            virar o próximo card também — senão você teria que virar a carta
-            atual só para poder corrigir a resposta anterior. */}
-        {canGoBack && (
+        {/* Navegação livre: voltar a qualquer questão e alterar a resposta;
+            avançar deixa a atual sem resposta (tratada no Finalizar). */}
+        <View className="mt-3 flex-row gap-3">
           <TouchableOpacity
-            onPress={onBack}
+            onPress={onPrev}
+            disabled={!canPrev}
             activeOpacity={0.7}
-            className="mt-3 py-1 flex-row items-center justify-center gap-1.5"
+            className="flex-1 h-12 rounded-3xl flex-row items-center justify-center gap-1.5 border"
+            style={{
+              borderColor: colors.outlineVariant,
+              opacity: canPrev ? 1 : 0.4,
+            }}
           >
-            <Ionicons name="arrow-undo-outline" size={15} color={colors.outline} />
-            <Text className="text-outline font-inter-medium text-sm">
-              Desfazer resposta anterior
+            <Ionicons name="chevron-back" size={18} color={colors.onSurface} />
+            <Text className="text-on-surface font-inter-semibold text-sm">
+              Anterior
             </Text>
           </TouchableOpacity>
-        )}
+
+          <TouchableOpacity
+            onPress={isLastPosition ? onFinish : onNext}
+            activeOpacity={0.7}
+            className="flex-1 h-12 rounded-3xl flex-row items-center justify-center gap-1.5 border"
+            style={{ borderColor: colors.outlineVariant }}
+          >
+            <Text className="text-on-surface font-inter-semibold text-sm">
+              {isLastPosition ? 'Finalizar' : 'Próximo'}
+            </Text>
+            <Ionicons
+              name={isLastPosition ? 'flag-outline' : 'chevron-forward'}
+              size={18}
+              color={colors.onSurface}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );

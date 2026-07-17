@@ -18,6 +18,7 @@ import {
   getCommunityDeck,
   listReviews,
   hasDownloaded,
+  hasLocalCopy,
   getMyRating,
   downloadDeck,
   rateDeck,
@@ -87,7 +88,11 @@ export default function CommunityDeckScreen() {
   const [deck, setDeck] = useState<CommunityDeckRow | null>(null);
   const [cards, setCards] = useState<CommunityCardRow[]>([]);
   const [reviews, setReviews] = useState<DeckRatingRow[]>([]);
-  const [downloaded, setDownloaded] = useState(false);
+  // Dois conceitos distintos: ter uma cópia AGORA (controla o botão Baixar —
+  // excluiu a cópia? pode baixar de novo) × já ter baixado ALGUM DIA
+  // (registro permanente; é o que libera avaliar).
+  const [hasCopy, setHasCopy] = useState(false);
+  const [canRate, setCanRate] = useState(false);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -103,13 +108,15 @@ export default function CommunityDeckScreen() {
       setDeck(full.deck);
       setCards(full.cards);
     }
-    const [revs, dl, mine] = await Promise.all([
+    const [revs, copy, dl, mine] = await Promise.all([
       listReviews(id),
+      hasLocalCopy(id, user.id),
       hasDownloaded(id, user.id),
       getMyRating(id, user.id),
     ]);
     setReviews(revs);
-    setDownloaded(dl);
+    setHasCopy(copy);
+    setCanRate(dl);
     if (mine) {
       setStars(mine.stars);
       setComment(mine.comment ?? '');
@@ -128,7 +135,8 @@ export default function CommunityDeckScreen() {
     setDownloading(true);
     try {
       await downloadDeck(user.id, id);
-      setDownloaded(true);
+      setHasCopy(true);
+      setCanRate(true);
       await load();
       Alert.alert(
         'Deck baixado!',
@@ -264,8 +272,9 @@ export default function CommunityDeckScreen() {
           </Text>
         </View>
 
-        {/* Baixar */}
-        {downloaded ? (
+        {/* Baixar — o selo só aparece enquanto a cópia EXISTE nos seus decks;
+            excluiu a cópia? o botão volta e dá para baixar de novo. */}
+        {hasCopy ? (
           <View className="flex-row items-center justify-center gap-2 py-3 rounded-card bg-surface-container" style={cardShadow}>
             <Ionicons name="checkmark-circle" size={18} color={colors.success} />
             <Text className="text-on-surface font-inter-semibold text-sm">
@@ -279,7 +288,11 @@ export default function CommunityDeckScreen() {
             onPress={() => void handleDownload()}
             loading={downloading}
           >
-            {downloading ? 'Baixando...' : 'Baixar deck'}
+            {downloading
+              ? 'Baixando...'
+              : canRate
+                ? 'Baixar de novo'
+                : 'Baixar deck'}
           </Button>
         )}
 
@@ -305,8 +318,9 @@ export default function CommunityDeckScreen() {
           )}
         </View>
 
-        {/* Sua avaliação (só depois de baixar) */}
-        {downloaded && (
+        {/* Sua avaliação — quem já baixou ALGUM DIA pode avaliar, mesmo que
+            tenha excluído a cópia (usou o deck, a opinião vale). */}
+        {canRate && (
           <View className="gap-3 bg-surface-container rounded-card p-4" style={cardShadow}>
             <Text className="text-on-surface font-jakarta-bold text-base">
               Sua avaliação

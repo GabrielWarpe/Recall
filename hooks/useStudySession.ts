@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { Flashcard, Deck, Grade, StudyPhase, StudyMode } from '@/types';
 import { reviewCard } from '@/services/ai';
 import { db } from '@/services/database';
@@ -16,51 +16,64 @@ import { useActiveTimer } from '@/hooks/useActiveTimer';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 
-/** Um passo desfeito pelo "voltar": tudo que é preciso para restaurar o estado. */
-interface HistoryEntry {
-  /** O card ANTES da revisão — regravá-lo reverte o agendamento SM-2. */
-  card: Flashcard;
-  queue: Flashcard[];
-  correctCount: number;
-  againCount: number;
-  skippedCount: number;
-  done: number;
-  outcome: 'correct' | 'wrong' | 'skip';
+/**
+ * Resposta registrada de uma questão. Pode ser sobrescrita a qualquer momento
+ * enquanto a sessão está aberta (navegação livre) — por isso o SM-2 só é
+ * persistido na FINALIZAÇÃO, com a resposta definitiva de cada card.
+ */
+export interface CardAnswer {
+  correct: boolean;
+  /** Índice da alternativa escolhida (quiz) — reexibida marcada ao voltar. */
+  selectedIndex?: number;
+  /** Texto digitado (modo escrever) + veredito para reexibição. */
+  typed?: string;
+  typedVerdict?: string;
+  typedOverridden?: boolean;
 }
 
 /**
- * Sessão de estudo com fila e UMA PASSADA por card (estilo NotebookLM).
+ * Sessão de estudo com NAVEGAÇÃO LIVRE.
  *
- * Cada card aparece uma vez e vira um de três desfechos: Entendi
- * (`correctCount`), Não deu (`againCount`) ou Pulou (`skippedCount`). Os três
- * somam o total, e `done` conta quantos já foram processados. "Não deu" não
- * reaparece na sessão, mas o SM-2 o reagenda para outro dia normalmente.
+ * O conjunto de cards é fixo e ordenado; o usuário anda com Anterior/Próximo e
+ * cada questão guarda seu estado (sem resposta / certa / errada), que pode ser
+ * alterado ao voltar. Ao finalizar:
+ *  - tudo respondido → resultados direto;
+ *  - há questões sem resposta → `pendingFinish` sinaliza a tela para perguntar:
+ *    "Refazer questões" (rodada só com as sem resposta) ou "Deixar sem
+ *    resposta" (viram Puladas e vai para os resultados).
+ *
+ * A % de acerto do resultado é sobre o TOTAL (puladas contam contra).
  */
 export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
   const { user, refreshProfile } = useAuth();
   const { settings } = useSettings();
   const [phase, setPhase] = useState<StudyPhase>('idle');
-  const [queue, setQueue] = useState<Flashcard[]>([]);
-  const [total, setTotal] = useState(0);
-  const [done, setDone] = useState(0);
-  const [correctCount, setCorrectCount] = useState(0); // Entendi
-  const [againCount, setAgainCount] = useState(0); // Não deu
-  const [skippedCount, setSkippedCount] = useState(0); // Pulou
-  // Cards que não foram "Entendi" (errou ou pulou) — base do "praticar as que
-  // não entendi".
-  const [wrongIds, setWrongIds] = useState<Set<string>>(new Set());
-  // Pilha de respostas dadas, para o "voltar" desfazer.
-  const historyRef = useRef<HistoryEntry[]>([]);
+
+  // Conjunto fixo da sessão + mapa de respostas por card.
+  const [cards, setCards] = useState<Flashcard[]>([]);
+  const [answers, setAnswers] = useState<Record<string, CardAnswer>>({});
+  // Rodada de revisão ("Refazer questões"): ids das que estavam sem resposta.
+  const [redoIds, setRedoIds] = useState<string[] | null>(null);
+  // Posição dentro da sequência ativa (todas, ou só as da rodada de revisão).
+  const [seqIndex, setSeqIndex] = useState(0);
+  // Nº de questões sem resposta quando o Finalizar foi acionado (abre o modal).
+  const [pendingFinish, setPendingFinish] = useState<number | null>(null);
+  // Puladas (fixado na finalização — durante a sessão nada é "pulado").
+  const [skippedCount, setSkippedCount] = useState(0);
+  // Ordem das alternativas do quiz é derivada deste seed → estável na sessão.
+  const [sessionSeed, setSessionSeed] = useState(0);
+
   const startTimeRef = useRef<number>(0);
   // Tempo REAL de resolução (pausa em segundo plano). É o que vai para
   // `active_seconds` — o intervalo started_at→ended_at contaria o app
   // minimizado como se fosse estudo.
   const timer = useActiveTimer();
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  // Encerrar assim que o card em tela for resolvido (tempo esgotado no quiz).
-  // É um ref, não estado: quem decide é o `grade`/`skip` do MESMO tique, com os
-  // contadores já calculados — ler um estado aqui pegaria o valor anterior.
+  // Tempo esgotado (quiz regressivo): encerra quando o card em tela resolver,
+  // tratando o que ficou sem resposta como Pulada (sem modal — não há tempo).
   const endAfterCurrentRef = useRef(false);
+  // Trava contra dupla finalização (ex.: toque duplo no Finalizar).
+  const finishedRef = useRef(false);
 
   // Ancoragem: acurácia da ÚLTIMA sessão passada deste deck, capturada quando o
   // deck fica disponível — antes de a sessão atual ser gravada, então ela não
@@ -79,60 +92,126 @@ export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
     };
   }, [deck?.id, user?.id]);
 
+  // ── Derivados ──────────────────────────────────────────────────────────────
+
+  /** Sequência ativa: todas as questões, ou só as da rodada de revisão. */
+  const sequence = useMemo(
+    () =>
+      redoIds != null
+        ? redoIds
+            .map(id => cards.find(c => c.id === id))
+            .filter((c): c is Flashcard => c != null)
+        : cards,
+    [cards, redoIds],
+  );
+
+  const currentCard =
+    phase === 'studying' ? (sequence[seqIndex] ?? null) : null;
+  const currentAnswer = currentCard ? (answers[currentCard.id] ?? null) : null;
+
+  const answeredCount = useMemo(
+    () => cards.reduce((n, c) => n + (answers[c.id] ? 1 : 0), 0),
+    [cards, answers],
+  );
+  const correctCount = useMemo(
+    () => cards.reduce((n, c) => n + (answers[c.id]?.correct ? 1 : 0), 0),
+    [cards, answers],
+  );
+  const againCount = answeredCount - correctCount;
+  const unansweredCount = cards.length - answeredCount;
+
+  /** Ids que não foram "Entendi" (erradas ou puladas) — base do "refazer". */
+  const wrongIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of cards) {
+      const a = answers[c.id];
+      if (phase === 'finished' ? !a?.correct : a != null && !a.correct) {
+        s.add(c.id);
+      }
+    }
+    return s;
+  }, [cards, answers, phase]);
+
+  const canPrev = seqIndex > 0;
+  const canNext = seqIndex < sequence.length - 1;
+  const isLastPosition = seqIndex >= sequence.length - 1;
+
+  // ── Ciclo de vida ──────────────────────────────────────────────────────────
+
   const start = useCallback(
     (studyCards: Flashcard[]) => {
       const ordered = settings.shuffle
         ? [...studyCards].sort(() => Math.random() - 0.5)
         : [...studyCards];
-      // Baixa as imagens da sessão de antemão: quando o card chegar ao topo
-      // da fila, ela já está no cache do expo-image e aparece na hora.
+      // Baixa as imagens da sessão de antemão: quando o card chegar ao topo,
+      // ela já está no cache do expo-image e aparece na hora.
       prefetchCardImages(ordered);
-      setQueue(ordered);
-      setTotal(ordered.length);
-      setDone(0);
-      setCorrectCount(0);
-      setAgainCount(0);
+      setCards(ordered);
+      setAnswers({});
+      setRedoIds(null);
+      setSeqIndex(0);
+      setPendingFinish(null);
       setSkippedCount(0);
-      setWrongIds(new Set());
-      historyRef.current = [];
+      setSessionSeed(Math.floor(Math.random() * 0x7fffffff));
       setPhase('studying');
       startTimeRef.current = Date.now();
       setElapsedSeconds(0);
       endAfterCurrentRef.current = false;
+      finishedRef.current = false;
       timer.start();
     },
     [settings.shuffle, timer],
   );
 
   /**
-   * Pede para encerrar a sessão assim que o card em tela for resolvido. Nada é
-   * descartado: o que já foi concluído conta normalmente. Usado quando o tempo
-   * do quiz regressivo esgota — a questão aberta não é arrancada da mão.
+   * Encerra a sessão: persiste o SM-2 de cada questão RESPONDIDA (uma única
+   * vez, com a resposta definitiva), grava a sessão e roda o pós-processo
+   * (streak, conquistas, lembretes). Puladas não geram revisão SM-2.
    */
-  const requestFinish = useCallback(() => {
-    endAfterCurrentRef.current = true;
-  }, []);
+  const complete = useCallback(
+    (finalAnswers: Record<string, CardAnswer>, allCards: Flashcard[]) => {
+      if (finishedRef.current) return;
+      finishedRef.current = true;
 
-  // Encerra a sessão gravando o registro (só se algum card foi concluído).
-  const finalize = useCallback(
-    (reviewed: number, correct: number, again: number) => {
       // Para o cronômetro antes de qualquer await: o tempo é o da resolução,
       // não o da gravação.
       const activeSeconds = timer.stop();
       setElapsedSeconds(activeSeconds);
 
-      if (deck && user && reviewed > 0) {
+      const answered = allCards.filter(c => finalAnswers[c.id] != null);
+      const correct = answered.filter(c => finalAnswers[c.id]!.correct).length;
+      const again = answered.length - correct;
+      setSkippedCount(allCards.length - answered.length);
+      setPendingFinish(null);
+
+      if (deck && user && answered.length > 0) {
         const startedAt = new Date(startTimeRef.current).toISOString();
         void (async () => {
+          // SM-2 com a resposta DEFINITIVA de cada card (a navegação livre
+          // permite trocar a resposta, então nada foi gravado antes daqui).
+          for (const card of answered) {
+            const g: Grade = finalAnswers[card.id]!.correct ? 'good' : 'again';
+            const updated = reviewCard(card, g);
+            await db.decks.reviewCard(updated);
+            await db.reviews.log({
+              user_id: user.id,
+              card_id: card.id,
+              playlist_id: deck.id,
+              grade: g,
+              interval_before: card.interval,
+              interval_after: updated.interval,
+            });
+          }
+
           await db.sessions.create({
             user_id: user.id,
             playlist_id: deck.id,
             started_at: startedAt,
             ended_at: new Date().toISOString(),
-            cards_reviewed: reviewed,
+            cards_reviewed: answered.length,
             correct_count: correct,
-            // A avaliação virou binária: 'Difícil' não existe mais. A coluna
-            // fica (sessões antigas a usam), sempre zerada nas novas.
+            // A avaliação é binária: 'Difícil' não existe mais. A coluna fica
+            // (sessões antigas a usam), sempre zerada nas novas.
             hard_count: 0,
             again_count: again,
             mode,
@@ -212,173 +291,191 @@ export function useStudySession(deck: Deck | null, mode: StudyMode = 'flash') {
     ],
   );
 
+  // ── Navegação ──────────────────────────────────────────────────────────────
+
+  const next = useCallback(() => {
+    setSeqIndex(i => Math.min(i + 1, Math.max(sequence.length - 1, 0)));
+  }, [sequence.length]);
+
+  const prev = useCallback(() => {
+    setSeqIndex(i => Math.max(i - 1, 0));
+  }, []);
+
+  // ── Respostas ──────────────────────────────────────────────────────────────
+
   /**
-   * Responde o card do topo: acertou ou errou. Só existem estes dois níveis.
-   *
-   * O agendamento SM-2 continua vivo, com o mapeamento mínimo: errar equivale a
-   * "De novo" (o card volta amanhã E reaparece no fim desta sessão) e acertar
-   * equivale a "Bom" (o intervalo cresce). Os antigos "Difícil"/"Fácil" saíram
-   * da interface e não são mais gravados.
+   * Registra (ou sobrescreve) a resposta da questão atual. NÃO navega — quem
+   * decide avançar é a tela (quiz/escrever têm o botão "Próxima"; flashcards
+   * usam `answerAndAdvance`).
    */
   const answer = useCallback(
-    (correct: boolean) => {
-      if (!deck || !user) return;
-      const card = queue[0];
+    (correct: boolean, detail?: Omit<CardAnswer, 'correct'>) => {
+      const card = sequence[seqIndex];
       if (!card) return;
+      setAnswers(prevA => ({ ...prevA, [card.id]: { correct, ...detail } }));
+    },
+    [sequence, seqIndex],
+  );
 
-      const g: Grade = correct ? 'good' : 'again';
-      const updated = reviewCard(card, g);
-      void db.decks.reviewCard(updated);
-      void db.reviews.log({
-        user_id: user.id,
-        card_id: card.id,
-        playlist_id: deck.id,
-        grade: g,
-        interval_before: card.interval,
-        interval_after: updated.interval,
-      });
+  /** Limpa a resposta da questão atual (o "trocar resposta" do quiz/escrever). */
+  const clearAnswer = useCallback(() => {
+    const card = sequence[seqIndex];
+    if (!card) return;
+    setAnswers(prevA => {
+      const nextA = { ...prevA };
+      delete nextA[card.id];
+      return nextA;
+    });
+  }, [sequence, seqIndex]);
 
-      // Uma passada: cada card é processado uma vez e sai da fila. "Não deu"
-      // NÃO reaparece nesta sessão (mas o SM-2 acima já o reagenda para outro
-      // dia). Assim Entendi + Não deu + Pulou somam o total, como no NotebookLM.
-      const nextQueue = queue.slice(1);
-
-      // "Não entendi" (errou) entra no conjunto do "praticar as que não entendi".
-      if (!correct) {
-        setWrongIds(prev => {
-          const next = new Set(prev);
-          next.add(card.id);
-          return next;
-        });
-      }
-
-      const nextCorrect = correctCount + (correct ? 1 : 0);
-      const nextAgain = againCount + (correct ? 0 : 1);
-      const nextDone = done + 1;
-
-      historyRef.current.push({
-        card,
-        queue,
-        correctCount,
-        againCount,
-        skippedCount,
-        done,
-        outcome: correct ? 'correct' : 'wrong',
-      });
-
-      setCorrectCount(nextCorrect);
-      setAgainCount(nextAgain);
-      setDone(nextDone);
-      setQueue(nextQueue);
-
-      if (nextQueue.length === 0 || endAfterCurrentRef.current) {
-        // Gravado = respondidos (Entendi + Não deu); pulados não são revisão.
-        finalize(nextCorrect + nextAgain, nextCorrect, nextAgain);
+  /**
+   * Finaliza a sessão. Tudo respondido (ou `force`) → resultados; senão,
+   * sinaliza `pendingFinish` para a tela perguntar o que fazer com as
+   * questões sem resposta.
+   */
+  const finish = useCallback(
+    (opts?: { force?: boolean; withAnswers?: Record<string, CardAnswer> }) => {
+      const finalAnswers = opts?.withAnswers ?? answers;
+      const unanswered = cards.filter(c => finalAnswers[c.id] == null).length;
+      if (unanswered === 0 || opts?.force) {
+        complete(finalAnswers, cards);
+      } else {
+        setPendingFinish(unanswered);
       }
     },
-    [deck, user, queue, correctCount, againCount, skippedCount, done, finalize],
+    [answers, cards, complete],
   );
 
   /**
-   * Volta ao card anterior, desfazendo o desfecho: restaura fila e contadores,
-   * e — se foi uma resposta (não um pulo) — reverte o agendamento SM-2 e apaga
-   * o registro da revisão, senão ela continuaria pesando na retenção.
+   * Registra a resposta e segue o fluxo dos flashcards: avança para a próxima;
+   * na última posição (ou tempo esgotado), aciona a finalização.
    */
-  const back = useCallback(() => {
-    if (!user) return;
-    const prev = historyRef.current.pop();
-    if (!prev) return;
+  const answerAndAdvance = useCallback(
+    (correct: boolean, detail?: Omit<CardAnswer, 'correct'>) => {
+      const card = sequence[seqIndex];
+      if (!card) return;
+      const nextAnswers: Record<string, CardAnswer> = {
+        ...answers,
+        [card.id]: { correct, ...detail },
+      };
+      setAnswers(nextAnswers);
 
-    if (prev.outcome !== 'skip') {
-      void db.decks.reviewCard(prev.card); // reverte o SM-2 ao estado anterior
-      void db.reviews.undoLast(user.id, prev.card.id);
-    }
-    if (prev.outcome !== 'correct') {
-      setWrongIds(w => {
-        const n = new Set(w);
-        n.delete(prev.card.id);
-        return n;
-      });
-    }
+      if (endAfterCurrentRef.current) {
+        // Tempo esgotado: sem modal — o que ficou sem resposta vira Pulada.
+        complete(nextAnswers, cards);
+        return;
+      }
 
-    setQueue(prev.queue);
-    setCorrectCount(prev.correctCount);
-    setAgainCount(prev.againCount);
-    setSkippedCount(prev.skippedCount);
-    setDone(prev.done);
-  }, [user]);
+      if (redoIds != null) {
+        // Rodada de revisão: pula para a próxima ainda sem resposta; acabou →
+        // resultados automáticos (espírito do "Refazer questões").
+        const remaining = cards.filter(c => nextAnswers[c.id] == null);
+        if (remaining.length === 0) {
+          complete(nextAnswers, cards);
+          return;
+        }
+        const after = sequence.findIndex(
+          (c, i) => i > seqIndex && nextAnswers[c.id] == null,
+        );
+        const anywhere = sequence.findIndex(c => nextAnswers[c.id] == null);
+        setSeqIndex(after !== -1 ? after : anywhere !== -1 ? anywhere : 0);
+        return;
+      }
 
-  const canGoBack = historyRef.current.length > 0;
+      if (seqIndex >= sequence.length - 1) {
+        // Última questão respondida: finaliza (direto ou via modal).
+        const unanswered = cards.filter(c => nextAnswers[c.id] == null).length;
+        if (unanswered === 0) complete(nextAnswers, cards);
+        else setPendingFinish(unanswered);
+      } else {
+        setSeqIndex(seqIndex + 1);
+      }
+    },
+    [answers, cards, sequence, seqIndex, redoIds, complete],
+  );
 
-  // Pula o card do topo: conta como "Pulou" e sai da fila (uma passada).
-  const skip = useCallback(() => {
-    const card = queue[0];
-    const rest = queue.slice(1);
-    if (card) {
-      setWrongIds(prev => {
-        const next = new Set(prev);
-        next.add(card.id);
-        return next;
-      });
-      historyRef.current.push({
-        card,
-        queue,
-        correctCount,
-        againCount,
-        skippedCount,
-        done,
-        outcome: 'skip',
-      });
-      setSkippedCount(skippedCount + 1);
-      setDone(done + 1);
+  /** "Refazer questões": rodada apenas com as que estão sem resposta. */
+  const redoUnanswered = useCallback(() => {
+    const ids = cards.filter(c => answers[c.id] == null).map(c => c.id);
+    if (ids.length === 0) {
+      complete(answers, cards);
+      return;
     }
-    setQueue(rest);
-    if (rest.length === 0 || endAfterCurrentRef.current) {
-      finalize(correctCount + againCount, correctCount, againCount);
-    }
-  }, [queue, done, correctCount, againCount, skippedCount, finalize]);
+    setRedoIds(ids);
+    setSeqIndex(0);
+    setPendingFinish(null);
+  }, [cards, answers, complete]);
+
+  /** "Deixar sem resposta": as sem resposta viram Puladas → resultados. */
+  const leaveUnanswered = useCallback(() => {
+    finish({ force: true });
+  }, [finish]);
+
+  /**
+   * Tempo esgotado (quiz regressivo): a questão em tela ainda vale; a sessão
+   * encerra quando ela for resolvida, com as restantes como Puladas.
+   */
+  const requestFinish = useCallback(() => {
+    endAfterCurrentRef.current = true;
+  }, []);
 
   const reset = useCallback(() => {
     setPhase('idle');
-    setQueue([]);
-    setTotal(0);
-    setDone(0);
-    setCorrectCount(0);
-    setAgainCount(0);
+    setCards([]);
+    setAnswers({});
+    setRedoIds(null);
+    setSeqIndex(0);
+    setPendingFinish(null);
     setSkippedCount(0);
-    setWrongIds(new Set());
-    historyRef.current = [];
     setElapsedSeconds(0);
     endAfterCurrentRef.current = false;
+    finishedRef.current = false;
   }, []);
-
-  const currentCard = phase === 'studying' ? (queue[0] ?? null) : null;
 
   return {
     phase,
+    /** Conjunto fixo da sessão (ordem estável — paridade do misto usa isto). */
+    cards,
     currentCard,
-    done,
-    total,
+    /** Resposta salva da questão atual (null = sem resposta). */
+    currentAnswer,
+    /** Posição 1-based e tamanho da sequência ativa (rodada de revisão conta só as dela). */
+    position: Math.min(seqIndex + 1, Math.max(sequence.length, 1)),
+    sequenceLength: sequence.length,
+    /** Nº de questões já respondidas (barra de progresso). */
+    done: answeredCount,
+    total: cards.length,
     correctCount,
     againCount,
-    /** Cards pulados nesta sessão (o "Pulou" do resultado). */
+    unansweredCount,
+    /** Puladas (fixado na finalização). */
     skippedCount,
-    /** Ids que não foram "Entendi" (errou ou pulou) — base do "refazer". */
+    /** Ids errados/pulados — base do "praticar as que não entendi". */
     wrongIds,
     /** Tempo final da sessão (só preenchido depois de terminar). */
     elapsedSeconds,
     /** Acurácia da última sessão passada do deck (ancoragem); null se 1ª vez. */
     priorAccuracy,
-    /** Tem resposta anterior para desfazer? */
-    canGoBack,
+    /** Seed da sessão: mantém a ordem das alternativas do quiz estável. */
+    sessionSeed,
+    /** Rodada "Refazer questões" ativa? */
+    inRedoRound: redoIds != null,
+    /** > 0 → a tela deve perguntar o que fazer com as questões sem resposta. */
+    pendingFinish,
+    canPrev,
+    canNext,
+    isLastPosition,
     /** Lê o tempo corrente sem re-renderizar — para o relógio da tela. */
     getElapsed: timer.getElapsed,
     start,
-    /** Resposta binária: true = acertei, false = errei. */
     answer,
-    /** Desfaz a última resposta e volta ao card anterior. */
-    back,
-    skip,
+    answerAndAdvance,
+    clearAnswer,
+    next,
+    prev,
+    finish,
+    redoUnanswered,
+    leaveUnanswered,
     requestFinish,
     reset,
   };

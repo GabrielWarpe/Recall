@@ -219,6 +219,11 @@ export async function downloadDeck(
   return deck;
 }
 
+/**
+ * Já baixou este deck ALGUMA VEZ (registro permanente em `deck_downloads`).
+ * Serve para liberar a avaliação — NÃO para bloquear novo download: quem
+ * excluiu a cópia pode baixar de novo (ver `hasLocalCopy`).
+ */
 export async function hasDownloaded(
   communityDeckId: string,
   userId: string,
@@ -230,6 +235,24 @@ export async function hasDownloaded(
     .eq('user_id', userId)
     .maybeSingle();
   return data != null;
+}
+
+/**
+ * Tem uma cópia deste deck NOS SEUS DECKS AGORA? Olha a proveniência
+ * (`origin_community_deck_id`) dos decks atuais — se a cópia foi excluída,
+ * volta false e o botão "Baixar" reaparece.
+ */
+export async function hasLocalCopy(
+  communityDeckId: string,
+  userId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from('playlists')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('origin_community_deck_id', communityDeckId)
+    .limit(1);
+  return (data?.length ?? 0) > 0;
 }
 
 // ── Avaliações ───────────────────────────────────────────────────────────────

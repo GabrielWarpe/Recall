@@ -150,11 +150,13 @@ export function SessionResult({
             </View>
           </View>
 
-          {/* Legenda dos três desfechos */}
+          {/* Legenda: total + os três desfechos. A % de acerto é sobre o
+              TOTAL (puladas contam contra). */}
           <View className="gap-3 pl-2">
-            <LegendRow label="Entendi" value={correct} color={colors.success} />
-            <LegendRow label="Errei" value={wrong} color={colors.onSurface} />
-            <LegendRow label="Pulou" value={skipped} color={colors.onSurface} />
+            <LegendRow label="Total" value={total} color={colors.onSurface} />
+            <LegendRow label="Acertos" value={correct} color={colors.success} />
+            <LegendRow label="Erros" value={wrong} color={colors.error} />
+            <LegendRow label="Puladas" value={skipped} color={colors.onSurface} />
           </View>
         </View>
       </View>
