@@ -60,13 +60,14 @@ export function DeckAvatar({ coverUrl, size = 48, radius = 12 }: DeckAvatarProps
     );
   }
 
-  // Sem capa: o "livrinho" no chip tingido — mesma moldura, mesma silhueta.
+  // Sem capa: pilha de camadas no chip tingido — mesma metáfora de "deck" da
+  // aba Decks (`albums`), no lugar de um livro genérico.
   return (
     <View
       className="items-center justify-center"
       style={{ ...frame, backgroundColor: colors.primary + '1F' }}
     >
-      <Ionicons name="book" size={Math.round(size * 0.5)} color={colors.primary} />
+      <Ionicons name="layers" size={Math.round(size * 0.5)} color={colors.primary} />
     </View>
   );
 }

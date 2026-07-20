@@ -87,102 +87,114 @@ export default function CommunityScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <View className="px-5 pt-6 pb-3">
-        <Text
-          className="text-on-surface font-jakarta-extrabold text-3xl"
-          style={{ letterSpacing: -0.5 }}
-        >
-          Comunidade
-        </Text>
-      </View>
-
-      {/* Busca */}
-      <View className="px-5">
-        <Input
-          placeholder="Buscar concurso, matéria, tema..."
-          value={search}
-          onChangeText={setSearch}
-        />
-      </View>
-
-      {/* Categorias — filtro primário */}
-      {categories.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="mt-3"
-          contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
-        >
-          <TouchableOpacity
-            onPress={() => setCategory(null)}
-            activeOpacity={0.8}
-            className={`px-3.5 py-1.5 rounded-pill ${
-              effectiveCategory === null
-                ? 'bg-primary-container'
-                : 'bg-surface-container'
-            }`}
-          >
-            <Text
-              className={`font-inter-semibold text-xs ${
-                effectiveCategory === null
-                  ? 'text-on-primary-container'
-                  : 'text-outline'
-              }`}
-            >
-              Todos
-            </Text>
-          </TouchableOpacity>
-          {categories.map(tag => {
-            const active = effectiveCategory === tag;
-            return (
-              <TouchableOpacity
-                key={tag}
-                onPress={() => setCategory(active ? null : tag)}
-                activeOpacity={0.8}
-                className={`px-3.5 py-1.5 rounded-pill ${
-                  active ? 'bg-primary-container' : 'bg-surface-container'
-                }`}
-              >
-                <Text
-                  className={`font-inter-semibold text-xs ${
-                    active ? 'text-on-primary-container' : 'text-outline'
-                  }`}
-                >
-                  {tag}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
-
       {loading && decks.length === 0 ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={colors.primary} />
         </View>
-      ) : filtered.length === 0 ? (
-        <View className="items-center justify-center px-8 pt-24">
-          <View
-            className="w-16 h-16 rounded-card items-center justify-center mb-4"
-            style={{ backgroundColor: colors.primary + '22' }}
-          >
-            <Ionicons name="earth" size={28} color={colors.primary} />
-          </View>
-          <Text className="text-on-surface font-jakarta-bold text-lg text-center">
-            {search || effectiveCategory ? 'Nada encontrado' : 'Ainda não há decks públicos'}
-          </Text>
-          <Text className="text-outline font-inter-regular text-sm text-center mt-2">
-            {search || effectiveCategory
-              ? 'Tente outra busca ou categoria.'
-              : 'Seja o primeiro: publique um deck na edição dele.'}
-          </Text>
-        </View>
       ) : (
+        // Página inteira num só ScrollView: cabeçalho, busca e chips rolam
+        // JUNTO com o conteúdo (não ficam fixos), então nada de "tela cortada
+        // em duas" — ao descer, os chips somem naturalmente.
         <ScrollView
+          className="flex-1"
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: TAB_SCREEN_BOTTOM_INSET }}
         >
+          {/* Header */}
+          <View className="px-5 pt-6 pb-3">
+            <Text
+              className="text-on-surface font-jakarta-extrabold text-3xl"
+              style={{ letterSpacing: -0.5 }}
+            >
+              Comunidade
+            </Text>
+          </View>
+
+          {/* Busca */}
+          <View className="px-5">
+            <Input
+              placeholder="Buscar concurso, matéria, tema..."
+              value={search}
+              onChangeText={setSearch}
+            />
+          </View>
+
+          {/* Categorias — filtro primário. Os chips ficam num <View flex-row>
+              INTERNO (não como filhos diretos do contentContainer): um
+              ScrollView horizontal estica os filhos diretos na vertical, o que
+              virava cápsulas altas ao selecionar. */}
+          {categories.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              className="mt-3"
+              contentContainerStyle={{ paddingHorizontal: 20 }}
+            >
+              <View className="flex-row items-center gap-2">
+                <TouchableOpacity
+                  onPress={() => setCategory(null)}
+                  activeOpacity={0.8}
+                  className={`px-3.5 py-1.5 rounded-pill ${
+                    effectiveCategory === null
+                      ? 'bg-primary-container'
+                      : 'bg-surface-container'
+                  }`}
+                >
+                  <Text
+                    className={`font-inter-semibold text-xs ${
+                      effectiveCategory === null
+                        ? 'text-on-primary-container'
+                        : 'text-outline'
+                    }`}
+                  >
+                    Todos
+                  </Text>
+                </TouchableOpacity>
+                {categories.map(tag => {
+                  const active = effectiveCategory === tag;
+                  return (
+                    <TouchableOpacity
+                      key={tag}
+                      onPress={() => setCategory(active ? null : tag)}
+                      activeOpacity={0.8}
+                      className={`px-3.5 py-1.5 rounded-pill ${
+                        active ? 'bg-primary-container' : 'bg-surface-container'
+                      }`}
+                    >
+                      <Text
+                        className={`font-inter-semibold text-xs ${
+                          active ? 'text-on-primary-container' : 'text-outline'
+                        }`}
+                      >
+                        {tag}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          )}
+
+          {filtered.length === 0 ? (
+            <View className="items-center justify-center px-8 pt-24">
+              <View
+                className="w-16 h-16 rounded-card items-center justify-center mb-4"
+                style={{ backgroundColor: colors.primary + '22' }}
+              >
+                <Ionicons name="earth" size={28} color={colors.primary} />
+              </View>
+              <Text className="text-on-surface font-jakarta-bold text-lg text-center">
+                {search || effectiveCategory ? 'Nada encontrado' : 'Ainda não há decks públicos'}
+              </Text>
+              <Text className="text-outline font-inter-regular text-sm text-center mt-2">
+                {search || effectiveCategory
+                  ? 'Tente outra busca ou categoria.'
+                  : 'Seja o primeiro: publique um deck na edição dele.'}
+              </Text>
+            </View>
+          ) : (
+            <>
           {/* Em alta esta semana — vitrine com capas grandes. Sem dado de
               popularidade por janela de tempo no banco: usa downloads
               acumulados como aproximação (é o sinal de "alta" que existe). */}
@@ -297,6 +309,8 @@ export default function CommunityScreen() {
                 ))}
               </View>
             </View>
+          )}
+            </>
           )}
         </ScrollView>
       )}

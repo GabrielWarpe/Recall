@@ -33,13 +33,13 @@ interface Slide {
 function DeckDemo(colors: ThemePalette) {
   return (
     <View className="w-full bg-surface-container-high rounded-2xl p-4 flex-row items-center gap-3">
-      {/* Ícone de livro em chip tingido — mesmo padrão do DeckAvatar (fallback
+      {/* Pilha de camadas em chip tingido — mesmo padrão do DeckAvatar (fallback
           sem capa). Consistente com o resto do app, sem emoji de chrome. */}
       <View
         className="w-12 h-12 rounded-xl items-center justify-center"
         style={{ backgroundColor: colors.primary + '1f' }}
       >
-        <Ionicons name="book" size={24} color={colors.primary} />
+        <Ionicons name="layers" size={24} color={colors.primary} />
       </View>
       <View className="flex-1">
         <Text className="text-on-surface font-jakarta-bold text-sm">

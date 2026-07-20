@@ -163,7 +163,13 @@ export default function HomeScreen() {
           </View>
 
           <View className="flex-row items-center gap-1.5 mt-4">
-            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+            {/* Verde só quando a meta é batida; senão, a chama teal da sequência
+                (nada de check verde contradizendo "faltam N cards"). */}
+            <Ionicons
+              name={goalMet ? 'checkmark-circle' : 'flame'}
+              size={16}
+              color={goalMet ? colors.success : colors.tertiary}
+            />
             <Text className="text-on-surface-variant font-inter-medium text-sm">
               {ringStatus}
             </Text>
